@@ -1,4 +1,4 @@
-# Project Overview
+# Disaster Classification Analysis
 
 This repository contains datasets and analysis scripts for exploring disasters across Africa and South America. It covers data cleaning, visualization, feature engineering, dimensionality reduction (PCA), and classification.
 
@@ -60,7 +60,7 @@ This script performs **multi-class classification** to predict the **DISASTER CA
 
 ### Prerequisites
 
-1. Install **R** (version X.X.X or later).  
+1. Install **R** (version 2024.04.2+764 or later).  
 2. Install **RStudio** (recommended for running `.Rmd` files).  
 
 
