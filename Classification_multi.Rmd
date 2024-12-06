@@ -1,0 +1,2048 @@
+---
+title: "Country"
+author: "Zhe GUAN"
+date: "2024-12-02"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+
+
+```{r}
+
+df_africa <- read.csv(file =  "/Users/zheguan/DDA/Datamining/assignment2/Africa_data_pca.csv")
+df_south_america <- read.csv(file =  "/Users/zheguan/DDA/Datamining/assignment2/South_America_data_pca.csv")
+df_africa <- df_africa %>% select(-contains("PC")) 
+df_south_america <- df_south_america %>% select(-contains("PC")) 
+
+df_africa$Continent <- "Africa"
+df_south_america$Continent <- "South_America"
+
+
+final_data <- rbind(df_africa, df_south_america)
+colSums(is.na(final_data))
+
+```
+
+
+```{r}
+library(dplyr)
+library(stringr)
+
+#transform Year-month to Year and month columns
+final_data <- final_data %>%
+  mutate(
+    Year = case_when(
+      str_detect(`Year...Month`, "^\\d{4}/\\d{2}$") ~ str_sub(`Year...Month`, 1, 4), 
+      str_detect(`Year...Month`, "^[A-Za-z]{3}-\\d{2}$") ~ {
+        year <- as.numeric(str_sub(`Year...Month`, 5, 6))
+        as.character(ifelse(year > 50, 1900 + year, 2000 + year)) 
+      },
+      str_detect(`Year...Month`, "^\\d{4}/00$") ~ str_sub(`Year...Month`, 1, 4),  
+      TRUE ~ NA_character_  
+    ),
+  
+    Month = case_when(
+      str_detect(`Year...Month`, "^\\d{4}/\\d{2}$") ~ str_sub(`Year...Month`, 6, 7),  
+      str_detect(`Year...Month`, "^[A-Za-z]{3}-\\d{2}$") ~ {
+        month <- match(str_sub(`Year...Month`, 1, 3), month.abb)  
+        sprintf("%02d", month)  
+      },
+      #str_detect(`Year...Month`, "^\\d{4}/00$") ~ NA_character_,  
+      TRUE ~ NA_character_
+    )
+  )
+
+
+final_data[, c("Year...Month", "Year", "Month")]
+```
+
+```{r}
+#transform months to seasons
+df <- final_data
+
+df <- df %>%
+  mutate(
+    Season = case_when(
+      Month %in% c("03", "04", "05") ~ "Spring",  
+      Month %in% c("06", "07", "08") ~ "Summer",  
+      Month %in% c("09", "10", "11") ~ "Autumn",  
+      Month %in% c("12", "01", "02") ~ "Winter",  
+      TRUE ~ "Unknown"                       
+    )
+  ) %>%
+  
+  mutate(
+    Spring = ifelse(Season == "Spring", TRUE, FALSE),
+    Summer = ifelse(Season == "Summer",  TRUE, FALSE),
+    Autumn = ifelse(Season == "Autumn",  TRUE, FALSE),
+    Winter = ifelse(Season == "Winter",  TRUE, FALSE),
+    Unknown = ifelse(Season == "Unknown",  TRUE, FALSE)  
+  )
+
+
+head(df[, c("Year", "Month", "Season", "Spring", "Summer", "Autumn", "Winter", "Unknown")])
+```
+```{r}
+df <- df %>%
+  select(-contains("PC")) 
+
+
+df <- df %>% select( -contains("Year...")) %>% select(-contains("Month"))
+df <- df %>% select(-contains(c("Event","Season")))
+df
+```
+```{r}
+#encode category and countries
+encoded_data <- df %>%
+  mutate(
+    Category_Encoded = as.integer(factor(Category))
+  ) %>% mutate(
+    Country_Encoded = as.integer(factor(Country))
+  ) %>% 
+  select(-Country, -Category, -Country_ID) 
+
+encoded_data$Year <- encoded_data$Year |> as.integer()
+
+encoded_data <- encoded_data %>% mutate(
+                  Continent_Encoded = as.integer(factor(Continent)))  %>%
+                select(-Continent)
+
+encoded_data 
+country_mapping <- data.frame(
+  Country = unique(df$Country),                    
+  Country_ID = as.integer(factor(unique(df$Country))) 
+)
+
+print(country_mapping)
+
+
+
+category_mapping <- data.frame(
+  Category = unique(df$Category),                    
+  Category_Code = as.integer(factor(unique(df$Category))) 
+)
+
+
+print(category_mapping)
+
+
+continent_mapping <- data.frame(
+  Continent = unique(df$Continent),                    
+  Continent_ID = as.integer(factor(unique(df$Continent))) 
+)
+
+print(continent_mapping)
+
+```
+
+
+```{r}
+library(corrplot)
+encoded_data <- encoded_data %>%
+  rename(Country_ID = Country_Encoded)
+
+ccm <- cor(encoded_data)
+ccm
+ev <- eigen(ccm)
+eva <- ev$values
+evv <- ev$vectors
+pro_var <- eva/sum(eva)
+pro_var
+cum_pro <- cumsum(pro_var)
+cum_pro
+
+
+png(filename = "/Users/zheguan/DDA/Datamining/assignment2/Analysis1/corr_plot1.png", width = 800, height = 800)
+
+corrplot(ccm, method = "color", type = "upper", 
+         tl.col = "black", tl.srt = 45,   
+         tl.cex = 0.8,                   
+         addCoef.col = "black",         
+         number.cex = 0.7)    
+
+dev.off()
+
+```
+
+```{r}
+table(encoded_data$Country_ID)
+table(encoded_data$Category_Encoded)
+table(encoded_data$Continent_Encoded)
+```
+
+
+```{r}
+library(ggplot2)
+dark_blue <- c("#1f77b4")
+orange <- c("#ff7f0e")
+red <- c("#F26666")
+bright_red <- c("#FF4500")
+violet <- c("#EE82EE")
+yellow <- c("#FFDF00")
+gray <- c('#778899')
+violet2 <- c("#DE3163")
+green <- c('#2ca02c')
+blue <- c('#17becf')
+
+ev <- eigen(ccm)
+eva <- ev$values
+pro_var <- eva / sum(eva)
+cum_pro <- cumsum(pro_var)
+
+pc_data <- data.frame(
+  PC_Number = seq_along(cum_pro),
+  Cumulative_Variance = cum_pro
+)
+
+
+p<-ggplot(pc_data, aes(x = PC_Number, y = Cumulative_Variance)) +
+  geom_line(color = dark_blue, linetype = "dashed", size = 1) +
+  geom_point(size = 3, color = orange) +
+  labs(
+    title = "Cumulative Variance Explained by Principal Components",
+    x = "Principal Component (PC) Number",
+    y = "Cumulative Variance Explained"
+  ) +
+  theme_minimal(base_size = 15) +
+  theme(
+    plot.title = element_text(hjust = 0.5, face = "bold"),
+    axis.text = element_text(size = 12),
+    axis.title = element_text(size = 14),
+    panel.grid = element_blank()
+  ) +
+  scale_x_continuous(breaks = seq_along(cum_pro)) +
+  annotate("segment", x = min(pc_data$PC_Number), xend = max(pc_data$PC_Number) + 0.5, 
+           y = 0, yend = 0, arrow = arrow(length = unit(0.3, "cm")), size = 1) + 
+  annotate("segment", x = min(pc_data$PC_Number), xend = min(pc_data$PC_Number), 
+           y = 0, yend = max(pc_data$Cumulative_Variance) + 0.05, 
+           arrow = arrow(length = unit(0.3, "cm")), size = 1)  
+
+ggsave("/Users/zheguan/DDA/Datamining/assignment2/Analysis1/PCA_cum_variance.png", plot = p, width = 8, height = 8, units = "in", dpi = 300)
+
+print(p)
+
+
+
+```
+```{r}
+encoded_data
+#scaled_data <- scale(encoded_data)
+encoded_data_remove <- encoded_data[,-ncol(encoded_data)]
+
+train_index <- sample(1:nrow(encoded_data_remove), size = 0.8 * nrow(encoded_data_remove))
+
+pca_result <- prcomp(encoded_data_remove[train_index,], center = TRUE, scale. = TRUE)
+
+pca_scores <- as.data.frame(pca_result$x)  
+
+target_var <- encoded_data$Continent_Encoded[train_index]
+
+pc_data <- cbind(pca_scores,target_var)
+
+
+pca_scores
+```
+
+
+```{r}
+explained_var <- pca_result$sdev^2 / sum(pca_result$sdev^2)
+
+barplot(
+  explained_var, 
+  names.arg = paste0("PC", 1:length(explained_var)), 
+  las = 2, 
+  col = "lightblue", 
+  main = "Variance Explained by Each Principal Component",
+  xlab = "Principal Components", 
+  ylab = "Proportion of Variance"
+)
+
+```
+
+```{r}
+library(caret)
+library(nnet)
+
+pca_training_result <- prcomp(encoded_data_remove[train_index, ], center = TRUE, scale. = TRUE)
+
+cum_var <- cumsum(pca_training_result$sdev^2 / sum(pca_training_result$sdev^2))
+num_pc <- which(cum_var >= 0.99)[1]
+num_pc
+
+selected_pcs <- pca_training_result$x[, 1:num_pc]
+pc_data_training <- as.data.frame(selected_pcs)
+pc_data_training$Continent_Encoded <- encoded_data$Continent_Encoded[train_index]
+
+
+selected_pcs_test <- predict(pca_training_result, newdata = encoded_data_remove[-train_index, ])[, 1:num_pc]
+pc_data_test <- as.data.frame(selected_pcs_test)
+pc_data_test$Continent_Encoded <- encoded_data$Continent_Encoded[-train_index]
+
+train_data <- pc_data_training
+test_data <- pc_data_test
+
+
+train_data$Continent_Encoded <- as.factor(train_data$Continent_Encoded)
+test_data$Continent_Encoded <- as.factor(test_data$Continent_Encoded)
+
+```
+
+```{r}
+multi_logistic_model <- multinom(Continent_Encoded ~ ., data = train_data)
+
+
+predictions <- predict(multi_logistic_model, newdata = test_data)
+
+
+conf_matrix<-confusionMatrix(as.factor(predictions), as.factor(test_data$Continent_Encoded))
+
+
+train_control <- trainControl(method = "cv", number = 5)
+cv_model <- train(
+  Continent_Encoded ~ .,
+  data = train_data,
+  method = "multinom",
+  trControl = train_control
+)
+
+
+print(cv_model)
+```
+
+```{r}
+
+library(reshape2)
+library(ggplot2)
+
+loadings <- pca_training_result$rotation[, 1:num_pc] 
+loadings <- as.data.frame(loadings)
+colnames(loadings) <- paste0("PC", 1:num_pc)
+loadings$Variable <- rownames(loadings)  
+rownames(loadings) <- NULL  
+
+
+
+loadings_long <- melt(loadings, id.vars = "Variable", variable.name = "Principal_Component", value.name = "Loading")
+
+
+p <- ggplot(loadings_long, aes(x = Principal_Component, y = Variable, fill = Loading)) +
+  geom_tile() +
+  geom_text(aes(label = round(Loading, 2)), size = 3) +  
+  scale_fill_gradient2(low = dark_blue, high = bright_red, mid = "white", midpoint = 0) +
+  labs(title = "PCA Loadings Heatmap", x = "Principal Component", y = "Original Variables") +
+  theme_minimal() +
+  theme(
+    axis.text.x = element_text(angle = 45, hjust = 1), 
+    axis.text.y = element_text(size = 10),              
+    plot.title = element_text(size = 14, hjust = 0.5)   
+  ) 
+print(p)
+
+ggsave("/Users/zheguan/DDA/Datamining/assignment2/Analysis1/PCA_Loading_map.png", plot = p, width = 10, height = 8, units = "in", dpi = 300)
+```
+
+
+```{r}
+get_model_performance_cv <- function(train_size, data, target_column) {
+  
+  if (train_size > nrow(data)) {
+    train_size <- nrow(data)
+  }
+  
+  
+  subset_indices <- sample(1:nrow(data), size = train_size, replace = FALSE)
+  train_subset <- data[subset_indices, ]
+  
+
+  train_control <- trainControl(method = "cv", number = 5)  
+  
+
+  model <- train(
+    as.formula(paste(target_column, "~ .")),
+    data = train_subset,
+    method = "multinom",
+    trControl = train_control
+  )
+  
+  train_acc <- max(model$results$Accuracy)  
+  
+  return(train_acc)
+}
+
+
+set.seed(123)
+train_sizes <- seq(0.01, 0.9, by = 0.1) * nrow(train_data)
+
+
+learning_curve <- sapply(train_sizes, function(size) {
+  train_acc <- get_model_performance_cv(size, train_data, "Continent_Encoded")
+  test_acc <- get_model_performance_cv(size, test_data, "Continent_Encoded")  
+  c(train_acc, test_acc)
+})
+
+
+learning_curve_df <- data.frame(
+  Train_Size = train_sizes,
+  Train_Accuracy = learning_curve[1, ],
+  Test_Accuracy = learning_curve[2, ]
+)
+
+
+p <- ggplot(learning_curve_df, aes(x = Train_Size)) +
+  geom_line(aes(y = Train_Accuracy, color = "Train Accuracy"), size = 1.5, linetype = "solid") +
+  geom_line(aes(y = Test_Accuracy, color = "Test Accuracy"), size = 1.5, linetype = "dashed") +
+  labs(
+    title = "Learning Curve for Logic Regression",
+    x = "Training Set Size",
+    y = "Accuracy",
+    color = "Legend"
+  ) +
+  scale_color_manual(values = c("Train Accuracy" = "#1f77b4", "Test Accuracy" = red)) +
+  theme_minimal(base_size = 15) +
+  theme(
+    plot.title = element_text(hjust = 0.5, face = "bold", size = 18),  
+    axis.title = element_text(size = 14),
+    axis.text = element_text(size = 12),
+    panel.grid = element_blank() ,
+    axis.line = element_line(arrow = arrow(length = unit(0.3, "cm"), type = "closed"))
+  ) 
+
+ggsave("/Users/zheguan/DDA/Datamining/assignment2/Analysis1/logic_learning_curve.png", plot = p, width = 10, height = 8, units = "in", dpi = 300)
+print(p)
+
+
+```
+```{r}
+
+conf_metrics <- as.data.frame(conf_matrix$byClass)
+conf_metrics$Class <- rownames(conf_metrics)
+
+
+library(reshape2)
+conf_metrics_long <- melt(conf_metrics, id.vars = "Class", variable.name = "Metric", value.name = "Value")
+
+library(ggplot2)
+p <- ggplot(conf_metrics_long, aes(x = reorder(Class, -Value), y = Value, fill = Metric)) +
+  geom_bar(stat = "identity", position = position_dodge(width = 0.8), color = 'white',fill = red, size = 0.2) +
+  coord_flip() +
+  xlab("Class") +
+  ylab("Metric Value") +
+  ggtitle("Classification Metrics for Logic Regression")  +
+  theme_minimal(base_size = 15) +
+  theme(
+    axis.text.x = element_text(size = 12, angle = 45, hjust = 1),  
+    axis.text.y = element_text(size = 12),                        
+    axis.title = element_text(size = 14, face = "bold"),          
+    plot.title = element_text(hjust = 0.5, face = "bold", size = 14), 
+    legend.position = "none",                                 
+    panel.grid = element_blank()
+  ) 
+
+print(p)
+ggsave("/Users/zheguan/DDA/Datamining/assignment2/Analysis1/logic_metrics.png", plot = p, width = 10, height = 8, units = "in", dpi = 300)
+
+```
+```{r}
+install.packages('iml')
+library(iml)
+
+predictor <- Predictor$new(
+  model = multi_logistic_model,
+  data = train_data[, -ncol(train_data)],  
+  y = train_data$Continent_Encoded
+)
+
+shap <- Shapley$new(predictor, x.interest = test_data[1, -ncol(test_data)])
+# 提取 SHAP 值结果
+shap_values <- shap$results
+shap_values_long <- as.data.frame(shap_values)
+
+str(shap$results)
+shap$results
+
+ggplot(shap$results, aes(x = reorder(feature, phi), y = phi)) +
+  geom_bar(stat = "identity", fill = "#1f77b4", alpha = 0.8) +
+  coord_flip() +
+  labs(
+    title = "SHAP Values for Test Instance",
+    x = "Features",
+    y = "SHAP Value"
+  ) +
+  theme_minimal(base_size = 14) +
+  theme(
+    plot.title = element_text(hjust = 0.5, size = 16, face = "bold"),
+    axis.text.y = element_text(size = 12),
+    axis.text.x = element_text(size = 12),
+    
+  )
+
+```
+```{r}
+library(reshape2)
+predictions <- predict(multi_logistic_model, newdata = test_data)
+
+
+conf_matrix <- confusionMatrix(as.factor(predictions), as.factor(test_data$Continent_Encoded))
+
+conf_matrix_df <- as.data.frame.table(conf_matrix$table)
+
+
+p <- ggplot(conf_matrix_df, aes(x = Prediction, y = Reference, fill = Freq)) +
+  geom_tile(color = "white", lwd = 0.5) +
+  geom_text(aes(label = Freq), color = "white", fontface = "bold", size = 5) +  
+  scale_fill_gradient(low = "#1f77b4", high = red) + 
+  labs(
+    title = "Confusion Matrix Heatmap (Random Forest)",
+    x = "Predicted",
+    y = "Actual",
+    fill = "Frequency"
+  ) +
+  theme_minimal(base_size = 15) +
+  theme(
+    plot.title = element_text(hjust = 0.5, face = "bold", size = 15),  
+    axis.title = element_text(size = 14),
+    axis.text = element_text(size = 12),
+    legend.title = element_text(size = 12),
+    legend.text = element_text(size = 10),
+    panel.grid = element_blank()  
+  )
+
+ggsave("/Users/zheguan/DDA/Datamining/assignment2/Analysis1/logic_cm.png", plot = p, width = 10, height = 8, units = "in", dpi = 300)
+print(p)
+```
+
+```{r}
+train_control <- trainControl(method = "cv", number = 5)
+cv_model <- train(
+  Continent_Encoded ~ ., 
+  data = train_data, 
+  method = "multinom", 
+  trControl = train_control
+)
+
+print(cv_model)
+```
+#random forest
+```{r}
+library(randomForest)
+
+
+rf_model <- randomForest(Continent_Encoded ~ ., data = train_data, ntree = 300, mtry = sqrt(ncol(train_data) - 1), importance = TRUE)
+
+
+rf_predictions <- predict(rf_model, newdata = test_data)
+
+
+conf_matrix <- confusionMatrix(rf_predictions, test_data$Continent_Encoded)
+
+conf_matrix
+importance(rf_model)
+```
+
+```{r}
+rf_importance <- importance(rf_model)
+
+
+print(rf_importance)
+
+
+
+rf_importance_df <- data.frame(
+  Feature = rownames(rf_importance),
+  MeanDecreaseGini = rf_importance[, "MeanDecreaseGini"]
+)
+
+
+rf_importance_df <- rf_importance_df[order(-rf_importance_df$MeanDecreaseGini), ]
+
+
+library(ggplot2)
+p <- ggplot(rf_importance_df, aes(x = reorder(Feature, MeanDecreaseGini), y = MeanDecreaseGini)) +
+  geom_bar(stat = "identity", fill = orange) +
+  coord_flip() +
+  xlab("Features") +
+  ylab("Mean Decrease Gini") +
+  labs(
+    title ="Feature Importance (Random Forest)")+
+  theme_minimal()+
+  theme(
+    panel.grid = element_blank(),
+    plot.title = element_text(hjust = 0.5, face = "bold", size = 16),
+    axis.line = element_line(arrow = grid::arrow(length = unit(0.3, "cm"), type = "closed")),
+  )
+
+ggsave("/Users/zheguan/DDA/Datamining/assignment2/Analysis1/rf_Feature_importance.png", plot = p, width = 8, height = 8, units = "in", dpi = 300)
+print(p)
+
+```
+
+
+
+
+```{r}
+oob_error_df <- as.data.frame(rf_model$err.rate)
+oob_error_df$Trees <- 1:nrow(oob_error_df)  
+oob_error_long <- melt(oob_error_df, id.vars = "Trees", variable.name = "Error_Type", value.name = "Error_Rate")
+
+p <- ggplot(oob_error_long, aes(x = Trees, y = Error_Rate, color = Error_Type)) +
+  geom_line(size = 1) +
+  labs(
+    title = "OOB Error Rate vs. Number of Trees",
+    x = "Number of Trees",
+    y = "Error Rate",
+    color = "Error Type"
+  ) +
+  theme_minimal(base_size = 14) +
+  theme(
+    plot.title = element_text(hjust = 0.5, face = "bold", size = 16),
+    axis.title = element_text(size = 14),
+    axis.text = element_text(size = 12),
+    legend.title = element_text(size = 12),
+    legend.text = element_text(size = 10),
+    axis.line = element_line(arrow = arrow(length = unit(0.3, "cm"), type = "closed")),
+    panel.grid = element_blank()
+  ) +
+  scale_color_brewer(palette = "Set1")
+
+ggsave("/Users/zheguan/DDA/Datamining/assignment2/Analysis1/rf_OOB_error_rate.png", plot = p, width = 10, height = 8, units = "in", dpi = 300)
+print(p)
+
+  
+```
+```{r}
+library(reshape2)
+conf_matrix_df <- as.data.frame.table(conf_matrix$table)
+
+
+p <- ggplot(conf_matrix_df, aes(x = Prediction, y = Reference, fill = Freq)) +
+  geom_tile(color = "white", lwd = 0.5) +
+  geom_text(aes(label = Freq), color = "white", fontface = "bold", size = 5) +  
+  scale_fill_gradient(low = "#1f77b4", high = "#ff7f0e") + 
+  labs(
+    title = "Confusion Matrix Heatmap (Random Forest)",
+    x = "Predicted",
+    y = "Actual",
+    fill = "Frequency"
+  ) +
+  theme_minimal(base_size = 15) +
+  theme(
+    plot.title = element_text(hjust = 0.5, face = "bold", size = 15),  
+    axis.title = element_text(size = 14),
+    axis.text = element_text(size = 12),
+    legend.title = element_text(size = 12),
+    legend.text = element_text(size = 10),
+    panel.grid = element_blank()  
+  )
+
+ggsave("/Users/zheguan/DDA/Datamining/assignment2/Analysis1/rf_cm.png", plot = p, width = 10, height = 8, units = "in", dpi = 300)
+print(p)
+
+```
+
+
+```{r}
+library(ggplot2)
+library(randomForest)
+
+
+train_sizes <- seq(0.01, 1.00, by = 0.1)  
+train_accuracies <- numeric(length(train_sizes))
+test_accuracies <- numeric(length(train_sizes))
+
+set.seed(123)
+for (i in seq_along(train_sizes)) {
+
+  train_subset <- train_data[1:floor(nrow(train_data) * train_sizes[i]), ]
+  
+
+  if (length(unique(train_subset$Continent_Encoded)) < 2) {
+    train_accuracies[i] <- NA
+    test_accuracies[i] <- NA
+    next
+  }
+  
+
+  rf_subset_model <- randomForest(Continent_Encoded ~ ., data = train_subset, ntree = 500)
+  
+
+  train_predictions <- predict(rf_subset_model, newdata = train_subset)
+  train_accuracies[i] <- mean(train_predictions == train_subset$Continent_Encoded)
+  
+
+  test_predictions <- predict(rf_subset_model, newdata = test_data)
+  test_accuracies[i] <- mean(test_predictions == test_data$Continent_Encoded)
+}
+
+
+learning_curve_df <- data.frame(
+  Train_Size = train_sizes,
+  Train_Accuracy = train_accuracies,
+  Test_Accuracy = test_accuracies
+)
+
+
+p <- ggplot(learning_curve_df, aes(x = Train_Size)) +
+  geom_line(aes(y = Train_Accuracy, color = "Train Accuracy"), size = 1.5, linetype = "solid") +
+  geom_line(aes(y = Test_Accuracy, color = "Test Accuracy"), size = 1.5, linetype = "dashed") +
+  labs(
+    title = "Learning Curve for Random Forest",
+    x = "Training Set Size",
+    y = "Accuracy",
+    color = "Legend"
+  ) +
+  scale_color_manual(values = c("Train Accuracy" = "#1f77b4", "Test Accuracy" = "#ff7f0e")) +
+  theme_minimal(base_size = 15) +
+  theme(
+    plot.title = element_text(hjust = 0.5, face = "bold", size = 18),  
+    axis.title = element_text(size = 14),
+    axis.text = element_text(size = 12),
+    
+    panel.grid = element_blank() ,
+    axis.line = element_line(arrow = arrow(length = unit(0.3, "cm"), type = "closed"))
+  ) 
+
+ggsave("/Users/zheguan/DDA/Datamining/assignment2/Analysis1/rf_learning_curve.png", plot = p, width = 10, height = 8, units = "in", dpi = 300)
+print(p)
+
+```
+
+
+
+```{r}
+
+conf_metrics <- as.data.frame(conf_matrix$byClass)
+conf_metrics$Class <- rownames(conf_metrics)
+
+
+library(reshape2)
+conf_metrics_long <- melt(conf_metrics, id.vars = "Class", variable.name = "Metric", value.name = "Value")
+
+library(ggplot2)
+p <- ggplot(conf_metrics_long, aes(x = reorder(Class, -Value), y = Value, fill = Metric)) +
+  geom_bar(stat = "identity", position = position_dodge(width = 0.8), color = 'white',fill = orange, size = 0.2) +
+  coord_flip() +
+  xlab("Class") +
+  ylab("Metric Value") +
+  ggtitle("Classification Metrics for Random Forest")  +
+  theme_minimal(base_size = 15) +
+  theme(
+    axis.text.x = element_text(size = 12, angle = 45, hjust = 1),  
+    axis.text.y = element_text(size = 12),                        
+    axis.title = element_text(size = 14, face = "bold"),          
+    plot.title = element_text(hjust = 0.5, face = "bold", size = 14), 
+    legend.position = "none",                                 
+    panel.grid = element_blank()
+  ) 
+
+print(p)
+ggsave("/Users/zheguan/DDA/Datamining/assignment2/Analysis1/rf_metrics.png", plot = p, width = 10, height = 8, units = "in", dpi = 300)
+
+```
+
+#SVM
+```{r}
+library(e1071)
+
+
+svm_model <- svm(Continent_Encoded ~ ., data = train_data, kernel = "radial", cost = 1, gamma = 0.1, probability = TRUE)
+
+
+svm_predictions <- predict(svm_model, newdata = test_data)
+
+
+confusionMatrix(svm_predictions, test_data$Continent_Encoded)
+
+```
+```{r}
+conf_matrix <- confusionMatrix(svm_predictions, test_data$Continent_Encoded)
+
+conf_matrix_df <- as.data.frame(as.table(conf_matrix$table))
+
+
+p <- ggplot(conf_matrix_df, aes(x = Prediction, y = Reference, fill = Freq)) +
+  geom_tile(color = "white", lwd = 0.5) +
+  geom_text(aes(label = Freq), color = "white", fontface = "bold", size = 5) +  
+  scale_fill_gradient(low = "#1f77b4", high = violet) + 
+  labs(
+    title = "Confusion Matrix Heatmap (SVM - Radial Kernel)",
+    x = "Predicted",
+    y = "Actual",
+    fill = "Frequency"
+  ) +
+  theme_minimal(base_size = 15) +
+  theme(
+    plot.title = element_text(hjust = 0.5, face = "bold", size = 15),  
+    axis.title = element_text(size = 14),
+    axis.text = element_text(size = 12),
+    legend.title = element_text(size = 12),
+    legend.text = element_text(size = 10),
+    panel.grid = element_blank()  
+  )
+
+ggsave("/Users/zheguan/DDA/Datamining/assignment2/Analysis1/svm_cm.png", plot = p, width = 10, height = 8, units = "in", dpi = 300)
+print(p)
+```
+```{r}
+library(e1071)
+library(ggplot2)
+library(caret)
+
+# 定义一个函数来计算训练和测试的准确率
+get_learning_curve <- function(train_data, test_data, target_column, train_sizes, kernel = "radial", cost = 1, gamma = 0.1) {
+  train_accuracies <- numeric(length(train_sizes))
+  test_accuracies <- numeric(length(train_sizes))
+  
+  for (i in seq_along(train_sizes)) {
+    train_size <- train_sizes[i]
+    
+    # 从训练集中随机采样
+    subset_indices <- sample(1:nrow(train_data), size = train_size, replace = FALSE)
+    train_subset <- train_data[subset_indices, ]
+    
+    # 训练 SVM 模型
+    svm_model <- svm(as.formula(paste(target_column, "~ .")), 
+                     data = train_subset, 
+                     kernel = kernel, 
+                     cost = cost, 
+                     gamma = gamma)
+    
+    # 在训练集和测试集上预测
+    train_predictions <- predict(svm_model, newdata = train_subset)
+    test_predictions <- predict(svm_model, newdata = test_data)
+    
+    # 计算准确率
+    train_accuracies[i] <- mean(train_predictions == train_subset[[target_column]])
+    test_accuracies[i] <- mean(test_predictions == test_data[[target_column]])
+  }
+  
+  return(data.frame(
+    Train_Size = train_sizes,
+    Train_Accuracy = train_accuracies,
+    Test_Accuracy = test_accuracies
+  ))
+}
+
+# 设置训练集大小的范围
+set.seed(123)
+train_sizes <- seq(0.1, 0.9, by = 0.1) * nrow(train_data)
+
+# 获取学习曲线数据
+learning_curve_df <- get_learning_curve(
+  train_data = train_data,
+  test_data = test_data,
+  target_column = "Continent_Encoded",
+  train_sizes = train_sizes,
+  kernel = "radial",
+  cost = 1,
+  gamma = 0.1
+)
+
+# 绘制学习曲线
+p <- ggplot(learning_curve_df, aes(x = Train_Size)) +
+  geom_line(aes(y = Train_Accuracy, color = "Train Accuracy"), size = 1) +
+  geom_line(aes(y = Test_Accuracy, color = "Test Accuracy"), size = 1) +
+  labs(
+    title = "Learning Curve for SVM (Radial Kernel)",
+    x = "Training Set Size",
+    y = "Accuracy"
+  ) +
+  scale_color_manual(values = c("Train Accuracy" = "#1f77b4", "Test Accuracy" = violet)) +
+  theme_minimal(base_size = 15) +
+  theme(
+    panel.grid = element_blank(),
+    plot.title = element_text(hjust = 0.5, face = "bold", size = 16),
+    axis.title = element_text(size = 14, face = "bold"),
+    axis.text = element_text(size = 12),
+    axis.line = element_line(arrow = arrow(length = unit(0.3, "cm"), type = "closed"))
+  )
+
+print(p)
+ggsave("/Users/zheguan/DDA/Datamining/assignment2/Analysis1/SVM_learning_curve.png", plot = p, width = 10, height = 8, units = "in", dpi = 300)
+
+```
+
+
+```{r}
+conf_metrics <- as.data.frame(conf_matrix$byClass)
+
+
+conf_metrics$Class <- rownames(conf_metrics)
+
+conf_metrics_long <- melt(conf_metrics, id.vars = "Class", variable.name = "Metric", value.name = "Value")
+
+
+library(ggplot2)
+p <- ggplot(conf_metrics_long, aes(x = reorder(Class, -Value), y = Value, fill = Metric)) +
+  geom_bar(stat = "identity", position = position_dodge(width = 0.8), color = 'white',fill = violet, size = 0.2) +
+  coord_flip() +
+  xlab("Class") +
+  ylab("Metric Value") +
+  ggtitle("Classification Metrics for Radial SVM")  +
+  theme_minimal(base_size = 15) +
+  theme(
+    axis.text.x = element_text(size = 12, angle = 45, hjust = 1),  
+    axis.text.y = element_text(size = 12),                        
+    axis.title = element_text(size = 14, face = "bold"),          
+    plot.title = element_text(hjust = 0.5, face = "bold", size = 14), 
+    legend.position = "none",                                 
+    panel.grid = element_blank()
+  ) 
+
+print(p)
+ggsave("/Users/zheguan/DDA/Datamining/assignment2/Analysis1/svm_metrics.png", plot = p, width = 10, height = 8, units = "in", dpi = 300)
+```
+```{r}
+library(e1071)
+
+
+svm_model_linear <- svm(Continent_Encoded ~ ., data = train_data, kernel = "linear", cost = 1, gamma = 0.1)
+
+
+svm_predictions_linear <- predict(svm_model_linear, newdata = test_data)
+
+
+conf_matrix <- confusionMatrix(svm_predictions_linear, test_data$Continent_Encoded)
+
+```
+```{r}
+conf_metrics <- as.data.frame(conf_matrix$byClass)
+
+
+conf_metrics$Class <- rownames(conf_metrics)
+
+conf_metrics_long <- melt(conf_metrics, id.vars = "Class", variable.name = "Metric", value.name = "Value")
+
+
+p <- ggplot(conf_matrix_df, aes(x = Prediction, y = Reference, fill = Freq)) +
+  geom_tile(color = "white", lwd = 0.5) +
+  geom_text(aes(label = Freq), color = "white", fontface = "bold", size = 5) +  
+  scale_fill_gradient(low = "#1f77b4", high = violet2) + 
+  labs(
+    title = "Confusion Matrix Heatmap (SVM - Linear Kernel)",
+    x = "Predicted",
+    y = "Actual",
+    fill = "Frequency"
+  ) +
+  theme_minimal(base_size = 15) +
+  theme(
+    plot.title = element_text(hjust = 0.5, face = "bold", size = 15),  
+    axis.title = element_text(size = 14),
+    axis.text = element_text(size = 12),
+    legend.title = element_text(size = 12),
+    legend.text = element_text(size = 10),
+    panel.grid = element_blank()  
+  )
+
+ggsave("/Users/zheguan/DDA/Datamining/assignment2/Analysis1/svm2_cm.png", plot = p, width = 10, height = 8, units = "in", dpi = 300)
+print(p)
+
+```
+
+```{r}
+conf_metrics <- as.data.frame(conf_matrix$byClass)
+
+
+conf_metrics$Class <- rownames(conf_metrics)
+
+conf_metrics_long <- melt(conf_metrics, id.vars = "Class", variable.name = "Metric", value.name = "Value")
+
+
+library(ggplot2)
+p <- ggplot(conf_metrics_long, aes(x = reorder(Class, -Value), y = Value, fill = Metric)) +
+  geom_bar(stat = "identity", position = position_dodge(width = 0.8), color = 'white',fill = violet2, size = 0.2) +
+  coord_flip() +
+  xlab("Class") +
+  ylab("Metric Value") +
+  ggtitle("Classification Metrics for Radial SVM")  +
+  theme_minimal(base_size = 15) +
+  theme(
+    axis.text.x = element_text(size = 12, angle = 45, hjust = 1),  
+    axis.text.y = element_text(size = 12),                        
+    axis.title = element_text(size = 14, face = "bold"),          
+    plot.title = element_text(hjust = 0.5, face = "bold", size = 14), 
+    legend.position = "none",                                 
+    panel.grid = element_blank()
+  ) 
+
+print(p)
+ggsave("/Users/zheguan/DDA/Datamining/assignment2/Analysis1/svm_metrics.png", plot = p, width = 10, height = 8, units = "in", dpi = 300)
+```
+```{r}
+conf_metrics
+```
+
+#Navie Bayes
+```{r}
+library(e1071)
+library(caret)
+
+
+nb_model <- naiveBayes(Continent_Encoded ~ ., data = train_data)
+
+
+nb_predictions <- predict(nb_model, newdata = test_data)
+
+
+conf_matrix <- confusionMatrix(nb_predictions, test_data$Continent_Encoded)
+print(conf_matrix)
+
+
+nb_probabilities <- predict(nb_model, newdata = test_data, type = "raw")
+head(nb_probabilities)
+
+```
+
+```{r}
+library(e1071)
+library(caret)
+library(ggplot2)
+
+
+get_model_performance <- function(train_size, train_data, test_data, target_column) {
+  
+  subset_indices <- sample(1:nrow(train_data), size = train_size)
+  train_subset <- train_data[subset_indices, ]
+  
+ 
+  nb_model <- naiveBayes(as.formula(paste(target_column, "~ .")), data = train_subset)
+  
+
+  train_predictions <- predict(nb_model, newdata = train_subset)
+  train_acc <- sum(train_predictions == train_subset[[target_column]]) / nrow(train_subset)
+  
+ 
+  test_predictions <- predict(nb_model, newdata = test_data)
+  test_acc <- sum(test_predictions == test_data[[target_column]]) / nrow(test_data)
+  
+  return(c(train_acc, test_acc))
+}
+
+
+set.seed(123)
+train_sizes <- seq(0.1, 0.9, by = 0.1) * nrow(train_data)  
+learning_curve <- sapply(train_sizes, function(size) {
+  get_model_performance(size, train_data, test_data, "Continent_Encoded")
+})
+
+
+learning_curve_df <- data.frame(
+  Train_Size = train_sizes,
+  Train_Accuracy = learning_curve[1, ],
+  Test_Accuracy = learning_curve[2, ]
+)
+
+
+p <- ggplot(learning_curve_df, aes(x = Train_Size)) +
+  geom_line(aes(y = Train_Accuracy, color = "Train Accuracy"), size = 1) +
+  geom_line(aes(y = Test_Accuracy, color = "Test Accuracy"), size = 1) +
+  labs(title = "Learning Curve for Naive Bayes",
+       x = "Training Set Size",
+       y = "Accuracy") +
+  scale_color_manual(values = c("Train Accuracy" = "#1f77b4", "Test Accuracy" = yellow)) +
+  theme_minimal(base_size = 15) +
+  theme(
+    plot.title = element_text(hjust = 0.5, face = "bold",size = 14),
+    legend.title = element_blank(),
+    panel.grid.minor = element_blank(),
+    axis.line = element_line(arrow = arrow(length = unit(0.3, "cm"), type = "closed")),
+    panel.grid = element_blank()
+  )
+
+print(p)
+ggsave("/Users/zheguan/DDA/Datamining/assignment2/Analysis1/NB_learning_curve.png", plot = p, width = 10, height = 8, units = "in", dpi = 300)
+```
+```{r}
+conf_matrix <- confusionMatrix(nb_predictions, test_data$Continent_Encoded)
+
+conf_matrix_df <- as.data.frame(as.table(conf_matrix$table))
+
+
+p <- ggplot(conf_matrix_df, aes(x = Prediction, y = Reference, fill = Freq)) +
+  geom_tile(color = "white", lwd = 0.5) +
+  geom_text(aes(label = Freq), color = "white", fontface = "bold", size = 5) +  
+  scale_fill_gradient(low = "#1f77b4", high = yellow) + 
+  labs(
+    title = "Confusion Matrix Heatmap (Navie Bayes)",
+    x = "Predicted",
+    y = "Actual",
+    fill = "Frequency"
+  ) +
+  theme_minimal(base_size = 15) +
+  theme(
+    plot.title = element_text(hjust = 0.5, face = "bold", size = 15),  
+    axis.title = element_text(size = 14),
+    axis.text = element_text(size = 12),
+    legend.title = element_text(size = 12),
+    legend.text = element_text(size = 10),
+    panel.grid = element_blank()  
+  )
+
+ggsave("/Users/zheguan/DDA/Datamining/assignment2/Analysis1/nb_cm.png", plot = p, width = 10, height = 8, units = "in", dpi = 300)
+print(p)
+```
+```{r}
+conf_metrics <- as.data.frame(conf_matrix$byClass)
+
+
+conf_metrics$Class <- rownames(conf_metrics)
+
+conf_metrics_long <- melt(conf_metrics, id.vars = "Class", variable.name = "Metric", value.name = "Value")
+
+
+library(ggplot2)
+p <- ggplot(conf_metrics_long, aes(x = reorder(Class, -Value), y = Value, fill = Metric)) +
+  geom_bar(stat = "identity", position = position_dodge(width = 0.8), color = 'white',fill = yellow, size = 0.2) +
+  coord_flip() +
+  xlab("Class") +
+  ylab("Metric Value") +
+  ggtitle("Classification Metrics for Navie Bayes")  +
+  theme_minimal(base_size = 15) +
+  theme(
+    axis.text.x = element_text(size = 12, angle = 45, hjust = 1),  
+    axis.text.y = element_text(size = 12),                        
+    axis.title = element_text(size = 14, face = "bold"),          
+    plot.title = element_text(hjust = 0.5, face = "bold", size = 14), 
+    legend.position = "none",                                 
+    panel.grid = element_blank()
+  ) 
+
+print(p)
+ggsave("/Users/zheguan/DDA/Datamining/assignment2/Analysis1/nb_metrics.png", plot = p, width = 10, height = 8, units = "in", dpi = 300)
+```
+
+
+```{r}
+library(xgboost)
+library(caret)
+
+
+x_train <- as.matrix(train_data[, -ncol(train_data)]) 
+y_train <- as.numeric(train_data$Continent_Encoded) - 1 
+x_test <- as.matrix(test_data[, -ncol(test_data)])
+y_test <- as.numeric(test_data$Continent_Encoded) - 1
+
+
+dtrain <- xgb.DMatrix(data = x_train, label = y_train)
+dtest <- xgb.DMatrix(data = x_test, label = y_test)
+
+
+params <- list(
+  objective = "multi:softmax",    
+  num_class = length(unique(y_train)), 
+  eval_metric = "mlogloss",      
+  eta = 0.1,                     
+  max_depth = 6,                 
+  subsample = 0.8,              
+  colsample_bytree = 0.8        
+)
+
+
+xgb_model <- xgboost(
+  params = params,
+  data = dtrain,
+  nrounds = 100,       
+  verbose = 1
+)
+
+
+xgb_predictions <- predict(xgb_model, newdata = dtest)
+
+
+class_labels <- levels(train_data$Continent_Encoded)
+xgb_predictions <- factor(class_labels[xgb_predictions + 1], levels = class_labels)
+
+xgb_predictions
+test_data
+
+conf_matrix <- confusionMatrix(xgb_predictions, test_data$Continent_Encoded)
+print(conf_matrix)
+
+```
+```{r}
+library(xgboost)
+library(caret)
+library(ggplot2)
+
+# Prepare training and test data
+x_train <- as.matrix(train_data[, -ncol(train_data)])
+y_train <- as.numeric(train_data$Continent_Encoded) - 1
+x_test <- as.matrix(test_data[, -ncol(test_data)])
+y_test <- as.numeric(test_data$Continent_Encoded) - 1
+
+# Define parameter set for XGBoost
+params <- list(
+  objective = "multi:softmax",
+  num_class = length(unique(y_train)),
+  eval_metric = "mlogloss",
+  eta = 0.1,
+  max_depth = 6,
+  subsample = 0.8,
+  colsample_bytree = 0.8
+)
+
+# Define training sizes as proportions of the full training data
+train_sizes <- seq(0.01, 1.0, by = 0.1)
+train_accuracies <- numeric(length(train_sizes))
+test_accuracies <- numeric(length(train_sizes))
+
+set.seed(123)  # For reproducibility
+
+for (i in seq_along(train_sizes)) {
+  # Subset the training data
+  sample_size <- floor(train_sizes[i] * nrow(x_train))
+  subset_x <- x_train[1:sample_size, ]
+  subset_y <- y_train[1:sample_size]
+  
+  # Create DMatrix for subset
+  dtrain_subset <- xgb.DMatrix(data = subset_x, label = subset_y)
+  
+  # Train XGBoost model on subset
+  xgb_model <- xgboost(
+    params = params,
+    data = dtrain_subset,
+    nrounds = 100,
+    verbose = 0
+  )
+  
+  # Training accuracy
+  train_predictions <- predict(xgb_model, newdata = subset_x)
+  train_accuracies[i] <- mean(train_predictions == subset_y)
+  
+  # Test accuracy
+  test_predictions <- predict(xgb_model, newdata = x_test)
+  test_accuracies[i] <- mean(test_predictions == y_test)
+}
+
+# Create a data frame for plotting
+learning_curve_df <- data.frame(
+  Train_Size = train_sizes * 100,  # Convert proportions to percentages
+  Train_Accuracy = train_accuracies,
+  Test_Accuracy = test_accuracies
+)
+
+# Plot the learning curve
+p <- ggplot(learning_curve_df, aes(x = Train_Size)) +
+  geom_line(aes(y = Train_Accuracy, color = "Train Accuracy"), size = 1.5, linetype = "solid") +
+  geom_line(aes(y = Test_Accuracy, color = "Test Accuracy"), size = 1.5, linetype = "dashed") +
+  labs(
+    title = "Learning Curve for XGBoost",
+    x = "Training Set Size (%)",
+    y = "Accuracy",
+    color = "Legend"
+  ) +
+  scale_color_manual(values = c("Train Accuracy" = "#1f77b4", "Test Accuracy" = violet2)) +
+  theme_minimal(base_size = 14) +
+  theme(
+    plot.title = element_text(hjust = 0.5, face = "bold", size = 16),
+    axis.title = element_text(size = 14),
+    axis.text = element_text(size = 12),
+    axis.line = element_line(arrow = arrow(length = unit(0.3, "cm"), type = "closed")),
+    panel.grid = element_blank()
+  )
+
+# Save and display the plot
+#ggsave("xgb_learning_curve.png", plot = p, width = 10, height = 8, units = "in", dpi = 300)
+print(p)
+
+
+ggsave("/Users/zheguan/DDA/Datamining/assignment2/Analysis1/XGB_learning_curve2.png", plot = p, width = 10, height = 8, units = "in", dpi = 300)
+```
+
+```{r}
+conf_matrix <- confusionMatrix(xgb_predictions, test_data$Continent_Encoded)
+
+conf_matrix_df <- as.data.frame(as.table(conf_matrix$table))
+
+
+p <- ggplot(conf_matrix_df, aes(x = Prediction, y = Reference, fill = Freq)) +
+  geom_tile(color = "white", lwd = 0.5) +
+  geom_text(aes(label = Freq), color = "white", fontface = "bold", size = 5) +  
+  scale_fill_gradient(low = "#1f77b4", high = violet2) + 
+  labs(
+    title = "Confusion Matrix Heatmap (XGBoost)",
+    x = "Predicted",
+    y = "Actual",
+    fill = "Frequency"
+  ) +
+  theme_minimal(base_size = 15) +
+  theme(
+    plot.title = element_text(hjust = 0.5, face = "bold", size = 15),  
+    axis.title = element_text(size = 14),
+    axis.text = element_text(size = 12),
+    legend.title = element_text(size = 12),
+    legend.text = element_text(size = 10),
+    panel.grid = element_blank()  
+  )
+
+ggsave("/Users/zheguan/DDA/Datamining/assignment2/Analysis1/xgb_cm.png", plot = p, width = 10, height = 8, units = "in", dpi = 300)
+print(p)
+```
+```{r}
+conf_metrics <- as.data.frame(conf_matrix$byClass)
+
+
+conf_metrics$Class <- rownames(conf_metrics)
+
+conf_metrics_long <- melt(conf_metrics, id.vars = "Class", variable.name = "Metric", value.name = "Value")
+
+
+library(ggplot2)
+p <- ggplot(conf_metrics_long, aes(x = reorder(Class, -Value), y = Value, fill = Metric)) +
+  geom_bar(stat = "identity", position = position_dodge(width = 0.8), color = 'white',fill = violet2, size = 0.2) +
+  coord_flip() +
+  xlab("Class") +
+  ylab("Metric Value") +
+  ggtitle("Classification Metrics for XGBoost")  +
+  theme_minimal(base_size = 15) +
+  theme(
+    axis.text.x = element_text(size = 12, angle = 45, hjust = 1),  
+    axis.text.y = element_text(size = 12),                        
+    axis.title = element_text(size = 14, face = "bold"),          
+    plot.title = element_text(hjust = 0.5, face = "bold", size = 14), 
+    legend.position = "none",                                 
+    panel.grid = element_blank()
+  ) 
+
+print(p)
+ggsave("/Users/zheguan/DDA/Datamining/assignment2/Analysis1/xgb_metrics.png", plot = p, width = 10, height = 8, units = "in", dpi = 300)
+```
+
+
+
+
+
+#decision tree
+```{r}
+library(rpart)
+library(rpart.plot)  
+
+
+dt_model <- rpart(Continent_Encoded ~ ., 
+                  data = train_data, 
+                  method = "class")  
+
+
+rpart.plot(dt_model, type = 2, extra = 104, fallen.leaves = TRUE, main = "Decision Tree")
+
+
+dt_predictions <- predict(dt_model, newdata = test_data, type = "class")
+
+
+conf_matrix <- confusionMatrix(dt_predictions, test_data$Continent_Encoded)
+print(conf_matrix)
+
+```
+```{r}
+library(rpart)
+library(ggplot2)
+
+
+dt_model <- rpart(Continent_Encoded ~ ., data = train_data, method = "class")
+
+
+feature_importance <- as.data.frame(dt_model$variable.importance)
+colnames(feature_importance) <- "Importance"
+feature_importance$Feature <- rownames(feature_importance)
+
+
+ggplot(feature_importance, aes(x = reorder(Feature, Importance), y = Importance)) +
+  geom_bar(stat = "identity", fill = "steelblue") +
+  coord_flip() +
+  labs(title = "Feature Importance (Decision Tree)", x = "Features", y = "Importance") +
+  theme_minimal()
+
+
+```
+
+```{r}
+conf_metrics <- as.data.frame(conf_matrix$byClass)
+
+
+conf_metrics$Class <- rownames(conf_metrics)
+
+conf_metrics_long <- melt(conf_metrics, id.vars = "Class", variable.name = "Metric", value.name = "Value")
+
+
+library(ggplot2)
+p <- ggplot(conf_metrics_long, aes(x = reorder(Class, -Value), y = Value, fill = Metric)) +
+  geom_bar(stat = "identity", position = position_dodge(width = 0.8), color = 'white',fill = green, size = 0.2) +
+  coord_flip() +
+  xlab("Class") +
+  ylab("Metric Value") +
+  ggtitle("Classification Metrics for Decision Tree")  +
+  theme_minimal(base_size = 15) +
+  theme(
+    axis.text.x = element_text(size = 12, angle = 45, hjust = 1),  
+    axis.text.y = element_text(size = 12),                        
+    axis.title = element_text(size = 14, face = "bold"),          
+    plot.title = element_text(hjust = 0.5, face = "bold", size = 14), 
+    legend.position = "none",                                 
+    panel.grid = element_blank()
+  ) 
+
+print(p)
+ggsave("/Users/zheguan/DDA/Datamining/assignment2/Analysis1/dt_metrics.png", plot = p, width = 10, height = 8, units = "in", dpi = 300)
+```
+
+```{r}
+library(rpart)
+library(caret)
+library(ggplot2)
+
+# 定义函数：获取决策树模型的性能
+get_decision_tree_performance <- function(train_size, data, target_column) {
+  # 随机抽取指定大小的训练集
+  subset_indices <- sample(1:nrow(data), size = train_size)
+  train_subset <- data[subset_indices, ]
+  test_subset <- data[-subset_indices, ]
+  
+  # 训练决策树模型
+  dt_model <- rpart(as.formula(paste(target_column, "~ .")), data = train_subset, method = "class")
+  
+  # 预测训练集和测试集
+  train_predictions <- predict(dt_model, newdata = train_subset, type = "class")
+  test_predictions <- predict(dt_model, newdata = test_subset, type = "class")
+  
+  # 计算准确率
+  train_acc <- sum(train_predictions == train_subset[[target_column]]) / nrow(train_subset)
+  test_acc <- sum(test_predictions == test_subset[[target_column]]) / nrow(test_subset)
+  
+  return(c(train_acc, test_acc))
+}
+
+# 设置随机种子和训练集大小
+set.seed(123)
+train_sizes <- seq(0.1, 0.9, by = 0.1) * nrow(train_data)
+
+# 计算每个训练集大小对应的性能
+learning_curve <- sapply(train_sizes, function(size) {
+  get_decision_tree_performance(size, train_data, "Continent_Encoded")
+})
+
+# 转换为数据框
+learning_curve_df <- data.frame(
+  Train_Size = train_sizes,
+  Train_Accuracy = learning_curve[1, ],
+  Test_Accuracy = learning_curve[2, ]
+)
+
+# 绘制学习曲线
+p <- ggplot(learning_curve_df, aes(x = Train_Size)) +
+  geom_line(aes(y = Train_Accuracy, color = "Train Accuracy"), size = 1) +
+  geom_line(aes(y = Test_Accuracy, color = "Test Accuracy"), size = 1) +
+  labs(title = "Learning Curve for Decision Tree",
+       x = "Training Set Size",
+       y = "Accuracy") +
+  scale_color_manual(values = c("Train Accuracy" = "#1f77b4", "Test Accuracy" = "#2ca02c")) +
+  theme_minimal(base_size = 15) +
+  theme(
+    legend.title = element_blank(),
+    panel.grid = element_blank(),
+    axis.line = element_line(arrow = arrow(length = unit(0.3, "cm"), type = "closed")),
+  )
+
+print(p)
+ggsave("/Users/zheguan/DDA/Datamining/assignment2/Analysis1/dt_learning_curve.png", plot = p, width = 10, height = 8, units = "in", dpi = 300)
+
+```
+
+```{r}
+conf_matrix <- confusionMatrix(dt_predictions, test_data$Continent_Encoded)
+
+conf_matrix_df <- as.data.frame(as.table(conf_matrix$table))
+
+
+p <- ggplot(conf_matrix_df, aes(x = Prediction, y = Reference, fill = Freq)) +
+  geom_tile(color = "white", lwd = 0.5) +
+  geom_text(aes(label = Freq), color = "white", fontface = "bold", size = 5) +  
+  scale_fill_gradient(low = "#1f77b4", high = green) + 
+  labs(
+    title = "Confusion Matrix Heatmap (Decision Tree)",
+    x = "Predicted",
+    y = "Actual",
+    fill = "Frequency"
+  ) +
+  theme_minimal(base_size = 15) +
+  theme(
+    plot.title = element_text(hjust = 0.5, face = "bold", size = 15),  
+    axis.title = element_text(size = 14),
+    axis.text = element_text(size = 12),
+    legend.title = element_text(size = 12),
+    legend.text = element_text(size = 10),
+    panel.grid = element_blank()  
+  )
+
+ggsave("/Users/zheguan/DDA/Datamining/assignment2/Analysis1/dt_cm.png", plot = p, width = 10, height = 8, units = "in", dpi = 300)
+print(p)
+```
+
+#Feed-Forward Neural Network
+```{r}
+
+library(nnet)
+library(caret)
+
+
+train_data$Continent_Encoded <- factor(train_data$Continent_Encoded)
+test_data$Continent_Encoded <- factor(test_data$Continent_Encoded, levels = levels(train_data$Continent_Encoded))
+
+
+nn_model <- nnet(
+  Continent_Encoded ~ .,       
+  data = train_data,            
+  size = 10,                    
+  decay = 0.01,                
+  maxit = 200                  
+)
+
+
+nn_predictions <- predict(nn_model, newdata = test_data, type = "class")
+
+
+nn_predictions <- factor(nn_predictions, levels = levels(test_data$Continent_Encoded))
+
+
+conf_matrix <- confusionMatrix(nn_predictions, test_data$Continent_Encoded)
+print(conf_matrix)
+
+
+
+```
+```{r}
+library(nnet)
+library(ggplot2)
+
+
+get_nn_performance <- function(train_size, data, target_column, hidden_size = 10, decay = 0.01, maxit = 200) {
+ 
+  subset_indices <- sample(1:nrow(data), size = train_size)
+  train_subset <- data[subset_indices, ]
+  test_subset <- data[-subset_indices, ]
+  
+
+  nn_model <- nnet(
+    as.formula(paste(target_column, "~ .")), 
+    data = train_subset, 
+    size = hidden_size, 
+    decay = decay, 
+    maxit = maxit, 
+    trace = FALSE
+  )
+  
+
+  train_predictions <- predict(nn_model, newdata = train_subset, type = "class")
+  test_predictions <- predict(nn_model, newdata = test_subset, type = "class")
+  
+
+  train_acc <- sum(train_predictions == train_subset[[target_column]]) / nrow(train_subset)
+  test_acc <- sum(test_predictions == test_subset[[target_column]]) / nrow(test_subset)
+  
+  return(c(train_acc, test_acc))
+}
+
+
+set.seed(123)
+train_sizes <- seq(0.01, 0.9, by = 0.1) * nrow(train_data)
+
+
+learning_curve <- sapply(train_sizes, function(size) {
+  get_nn_performance(size, train_data, "Continent_Encoded", hidden_size = 10, decay = 0.01, maxit = 200)
+})
+
+
+learning_curve_df <- data.frame(
+  Train_Size = train_sizes,
+  Train_Accuracy = learning_curve[1, ],
+  Test_Accuracy = learning_curve[2, ]
+)
+
+
+p <- ggplot(learning_curve_df, aes(x = Train_Size)) +
+  geom_line(aes(y = Train_Accuracy, color = "Train Accuracy"), size = 1) +
+  geom_line(aes(y = Test_Accuracy, color = "Test Accuracy"), size = 1) +
+  labs(
+    title = "Learning Curve for Neural Network",
+    x = "Training Set Size",
+    y = "Accuracy"
+  ) +
+  scale_color_manual(values = c("Train Accuracy" = "#1f77b4", "Test Accuracy" = gray)) +
+  theme_minimal(base_size = 15) +
+  theme(
+    legend.title = element_blank(),
+    panel.grid = element_blank(),
+  axis.line = element_line(arrow = arrow(length = unit(0.3, "cm"), type = "closed")),
+  )
+
+print(p)
+ggsave("/Users/zheguan/DDA/Datamining/assignment2/Analysis1/nn_learning_curve.png", plot = p, width = 10, height = 8, units = "in", dpi = 300)
+
+
+```
+```{r}
+conf_matrix <- confusionMatrix(nn_predictions, test_data$Continent_Encoded)
+
+conf_matrix_df <- as.data.frame(as.table(conf_matrix$table))
+
+
+p <- ggplot(conf_matrix_df, aes(x = Prediction, y = Reference, fill = Freq)) +
+  geom_tile(color = "white", lwd = 0.5) +
+  geom_text(aes(label = Freq), color = "white", fontface = "bold", size = 5) +  
+  scale_fill_gradient(low = "#1f77b4", high = gray) + 
+  labs(
+    title = "Confusion Matrix Heatmap (FFNN)",
+    x = "Predicted",
+    y = "Actual",
+    fill = "Frequency"
+  ) +
+  theme_minimal(base_size = 15) +
+  theme(
+    plot.title = element_text(hjust = 0.5, face = "bold", size = 15),  
+    axis.title = element_text(size = 14),
+    axis.text = element_text(size = 12),
+    legend.title = element_text(size = 12),
+    legend.text = element_text(size = 10),
+    panel.grid = element_blank()  
+  )
+
+ggsave("/Users/zheguan/DDA/Datamining/assignment2/Analysis1/nn_cm.png", plot = p, width = 10, height = 8, units = "in", dpi = 300)
+print(p)
+```
+
+```{r}
+
+conf_metrics <- as.data.frame(conf_matrix$byClass)
+
+
+conf_metrics$Class <- rownames(conf_metrics)
+
+conf_metrics_long <- melt(conf_metrics, id.vars = "Class", variable.name = "Metric", value.name = "Value")
+
+
+library(ggplot2)
+p <- ggplot(conf_metrics_long, aes(x = reorder(Class, -Value), y = Value, fill = Metric)) +
+  geom_bar(stat = "identity", position = position_dodge(width = 0.8), color = 'white',fill = gray, size = 0.2) +
+  coord_flip() +
+  xlab("Class") +
+  ylab("Metric Value") +
+  ggtitle("Classification Metrics for FFNN")  +
+  theme_minimal(base_size = 15) +
+  theme(
+    axis.text.x = element_text(size = 12, angle = 45, hjust = 1),  
+    axis.text.y = element_text(size = 12),                        
+    axis.title = element_text(size = 14, face = "bold"),          
+    plot.title = element_text(hjust = 0.5, face = "bold", size = 14), 
+    legend.position = "none",                                 
+    panel.grid = element_blank()
+  ) 
+
+print(p)
+ggsave("/Users/zheguan/DDA/Datamining/assignment2/Analysis1/nn_metrics.png", plot = p, width = 10, height = 8, units = "in", dpi = 300)
+```
+
+```{r}
+install.packages("NeuralNetTools")  
+library(NeuralNetTools)
+plotnet(nn_model, 
+        circle_col = c("lightblue", "lightcoral"), 
+        line_col = c("purple", "pink"), 
+        alpha = 0.7,
+        circle_cex = 2) 
+```
+# compare
+```{r}
+
+extract_metrics <- function(model_predictions, actual_labels, model_name) {
+  conf_matrix <- confusionMatrix(model_predictions, actual_labels)
+  metrics <- as.data.frame(conf_matrix$byClass)
+  metrics$Accuracy <- conf_matrix$overall["Accuracy"]
+  metrics$Model <- model_name
+  return(metrics)
+}
+
+
+nn_metrics <- extract_metrics(nn_predictions, test_data$Continent_Encoded, "Neural Network")
+dt_metrics <- extract_metrics(dt_predictions, test_data$Continent_Encoded, "Decision Tree")
+xgb_metrics <- extract_metrics(xgb_predictions, test_data$Continent_Encoded, "XGBoost")
+nb_metrics <- extract_metrics(nb_predictions, test_data$Continent_Encoded, "Naive Bayes")
+svm_linear_metrics <- extract_metrics(svm_predictions_linear, test_data$Continent_Encoded, "SVM (Linear Kernel)")
+svm_metrics <- extract_metrics(svm_predictions, test_data$Continent_Encoded, "SVM (Radial Kernel)")
+rf_metrics <- extract_metrics(rf_predictions, test_data$Continent_Encoded, "Random Forest")
+logistic_metrics <- extract_metrics(predictions, test_data$Continent_Encoded, "Logistic Regression")
+
+
+all_metrics <- rbind(nn_metrics, dt_metrics, xgb_metrics, nb_metrics, svm_linear_metrics, svm_metrics, rf_metrics, logistic_metrics)
+
+all_metrics
+```
+
+```{r}
+library(dplyr)
+
+
+available_metrics <- colnames(all_metrics)
+available_metrics
+
+key_metrics <- c("Accuracy", "Sensitivity", "Specificity", "F1", "Balanced Accuracy")
+
+
+valid_metrics <- intersect(key_metrics, available_metrics)
+
+
+summary_table <- all_metrics %>%
+  group_by(Model) %>%
+  summarise(across(all_of(valid_metrics), ~ mean(.x, na.rm = TRUE), .names = "mean_{.col}"))
+
+
+print(summary_table)
+
+
+```
+
+```{r}
+library(ggplot2)
+library(reshape2)
+
+
+all_metrics_long <- melt(all_metrics, id.vars = "Model", variable.name = "Metric", value.name = "Value")
+
+
+key_metrics <- c("Accuracy", "Sensitivity", "Specificity", "F1", "Balanced_Accuracy")
+filtered_metrics <- all_metrics_long %>%
+  filter(Metric %in% key_metrics)
+
+
+ggplot(filtered_metrics, aes(x = Model, y = Value, fill = Metric)) +
+  geom_bar(stat = "identity", position = "dodge") +
+  coord_flip() +
+  labs(title = "Model Performance Comparison", x = "Model", y = "Metric Value") +
+  theme_minimal() +
+  theme(
+    axis.text.x = element_text(size = 10, angle = 45, hjust = 1),
+    axis.text.y = element_text(size = 10),
+    legend.text = element_text(size = 10),
+    legend.title = element_text(size = 12)
+  )
+
+```
+```{r}
+library(caret)
+
+extract_metrics <- function(model_predictions, actual_labels, model_name) {
+  conf_matrix <- confusionMatrix(model_predictions, actual_labels)
+  metrics <- as.data.frame(conf_matrix$byClass)
+  metrics$Metric <- rownames(metrics)  # 将指标名称作为一列
+  metrics$Accuracy <- conf_matrix$overall["Accuracy"]
+  metrics$Model <- model_name
+  metrics <- metrics %>% pivot_longer(cols = -c(Model, Metric), names_to = "Class", values_to = "Value")
+  return(metrics)
+}
+
+
+
+nn_metrics <- extract_metrics(nn_predictions, test_data$Continent_Encoded, "Neural Network")
+dt_metrics <- extract_metrics(dt_predictions, test_data$Continent_Encoded, "Decision Tree")
+xgb_metrics <- extract_metrics(xgb_predictions, test_data$Continent_Encoded, "XGBoost")
+nb_metrics <- extract_metrics(nb_predictions, test_data$Continent_Encoded, "Naive Bayes")
+svm_linear_metrics <- extract_metrics(svm_predictions_linear, test_data$Continent_Encoded, "SVM (Linear Kernel)")
+svm_metrics <- extract_metrics(svm_predictions, test_data$Continent_Encoded, "SVM (Radial Kernel)")
+rf_metrics <- extract_metrics(rf_predictions, test_data$Continent_Encoded, "Random Forest")
+logistic_metrics <- extract_metrics(predictions, test_data$Continent_Encoded, "Logistic Regression")
+
+
+all_metrics_long <- rbind(
+  extract_metrics(nn_predictions, test_data$Continent_Encoded, "Neural Network"),
+  extract_metrics(dt_predictions, test_data$Continent_Encoded, "Decision Tree"),
+  extract_metrics(xgb_predictions, test_data$Continent_Encoded, "XGBoost"),
+  extract_metrics(nb_predictions, test_data$Continent_Encoded, "Naive Bayes"),
+  extract_metrics(svm_predictions_linear, test_data$Continent_Encoded, "SVM (Linear Kernel)"),
+  extract_metrics(svm_predictions, test_data$Continent_Encoded, "SVM (Radial Kernel)"),
+  extract_metrics(rf_predictions, test_data$Continent_Encoded, "Random Forest"),
+  extract_metrics(predictions, test_data$Continent_Encoded, "Logistic Regression")
+)
+
+
+rownames(all_metrics_long) <- NULL
+print(head(all_metrics_long))
+
+
+```
+
+```{r}
+library(reshape2)
+
+
+all_metrics_long <- melt(all_metrics, id.vars = c("Model", "Class", "x"), variable.name = "Metric", value.name = "Value")
+
+
+all_metrics_long
+
+```
+
+```{r}
+library(pROC)
+library(ggplot2)
+
+
+roc_list <- list()
+
+
+
+# Decision Tree
+dt_prob_predictions <- predict(dt_model, newdata = test_data, type = "prob")
+roc_dt <- roc(test_data$Continent_Encoded, dt_prob_predictions[, 2])
+roc_list[["Decision Tree"]] <- roc_dt
+
+# XGBoost
+x_test <- as.matrix(test_data[, -ncol(test_data)])
+y_test <- as.numeric(test_data$Continent_Encoded) - 1
+
+xgb_prob_predictions <- predict(xgb_model, newdata = x_test)
+xgb_prob_predictions <- matrix(xgb_prob_predictions, nrow = nrow(x_test), byrow = TRUE)
+
+roc_xgb <- roc(test_data$Continent_Encoded, xgb_prob_predictions[, 2])
+roc_list[["XGBoost"]] <- roc_xgb
+xgb_prob_predictions
+# Naive Bayes
+nb_prob_predictions <- predict(nb_model, newdata = test_data, type = "raw")
+xgb_prob_predictions <- matrix(xgb_prob_predictions, nrow = nrow(dtest), byrow = TRUE)
+roc_nb <- roc(test_data$Continent_Encoded, nb_prob_predictions[, 2])
+roc_list[["Naive Bayes"]] <- roc_nb
+
+
+
+# SVM (Radial Kernel)
+svm_prob_predictions <- predict(svm_model, newdata = test_data, probability = TRUE)
+svm_prob_matrix <- attr(svm_prob_predictions, "probabilities")
+svm_prob_matrix
+roc_svm <- roc(test_data$Continent_Encoded, svm_prob_matrix[, 1])
+
+# Random Forest
+rf_prob_predictions <- predict(rf_model, newdata = test_data, type = "prob")
+roc_rf <- roc(test_data$Continent_Encoded, rf_prob_predictions[, 2])
+roc_list[["Random Forest"]] <- roc_rf
+
+# Logistic Regression
+logistic_prob_predictions <- predict(multi_logistic_model, newdata = test_data, type = "probs")
+roc_logistic <- roc(test_data$Continent_Encoded, logistic_prob_predictions)
+roc_list[["Logistic Regression"]] <- roc_logistic
+
+# Generate probabilities from the FFNN model
+nn_prob_predictions <- predict(nn_model, newdata = test_data, type = "raw")
+
+# Check the structure of predictions
+head(nn_prob_predictions)
+
+# If nn_prob_predictions has only one column, assume it's P(class 1)
+# Ensure test_data$Continent_Encoded is coded as 0 and 1 (or 1 and 2)
+roc_nn <- roc(test_data$Continent_Encoded, nn_prob_predictions)
+nn_prob_predictions
+# Add the ROC curve to the list
+roc_list[["Feed-Forward Neural Network"]] <- roc_nn
+
+
+
+```
+
+```{r}
+library(ggplot2)
+library(pROC)
+
+# 自定义颜色
+custom_colors <- c("XGBoost" = yellow, 
+                   "Decision Tree" = green, 
+                   "Naive Bayes" = "#2ca02c", 
+                   "SVM (Linear Kernel)" = violet, 
+                   "SVM (Radial Kernel)" = "#9467bd", 
+                   "Random Forest" = "#8c564b", 
+                   "Logistic Regression" = "#e377c2")
+
+# 绘制 ROC 曲线
+ggroc(roc_list) +
+  geom_line(size = 1) +   # 调整线条粗细
+  ggtitle("ROC Curves for Different Models") +
+  xlab("False Positive Rate") +
+  ylab("True Positive Rate") +
+  theme_minimal(base_size = 15) +  # 增加基础字体大小
+  theme(
+    plot.title = element_text(hjust = 0.5, face = "bold", size = 16),  # 标题居中加粗
+    axis.title = element_text(size = 14),  # 坐标轴标题字体大小
+    axis.text = element_text(size = 12),  # 坐标轴刻度字体大小
+    legend.title = element_blank(),  # 去掉图例标题
+    legend.text = element_text(size = 10)  # 图例字体大小
+  )
+
+```
+
+```{r}
+# 安装并加载库
+install.packages("plotROC")
+library(plotROC)
+
+# 创建一个长格式数据框，用于 `plotROC`
+roc_df <- data.frame(
+  D = as.numeric(test_data$Continent_Encoded),  # 实际类别 (0 或 1)
+  DecisionTree = dt_prob_predictions[, 2],
+  XGBoost = xgb_prob_predictions[, 2],
+  NaiveBayes = nb_prob_predictions[, 2],
+  SVM = svm_prob_matrix[, 1],
+  RandomForest = rf_prob_predictions[, 2],
+  LogisticRegression = logistic_prob_predictions,
+  FFNN = nn_prob_predictions
+)
+
+
+roc_long <- reshape2::melt(roc_df, id.vars = "D", variable.name = "Model", value.name = "Probability")
+
+
+p <- ggplot(roc_long, aes(d = D, m = Probability, color = Model)) +
+  geom_roc(show.legend = TRUE, labelround = 2, size = 1) + 
+  labs(
+    title = "ROC Curves with AUC for Different Models",
+    x = "False Positive Rate",
+    y = "True Positive Rate"
+  ) +
+  style_roc(theme = theme_minimal()) +  
+  geom_abline(slope = 1, intercept = 0, linetype = "dashed", color = "black", size = 0.8)+
+  theme(
+    plot.title = element_text(hjust = 0.5, size = 14, face = "bold"),
+    panel.background = element_rect(fill = "white", color = NA),
+    legend.text = element_text(size = 10),
+  panel.grid = element_blank(),
+  axis.line = element_line(arrow = arrow(length = unit(0.3, "cm"), type = "closed"))
+  ) 
+print(p)
+ggsave("/Users/zheguan/DDA/Datamining/assignment2/Analysis1/ROC.png", plot = p, width = 10, height = 8, units = "in", dpi = 300)
+
+```
+
+```{r}
+# Generate two columns of probabilities
+nn_prob_predictions_two <- data.frame(
+  Class1 = nn_prob_predictions,        # Probability of Class 1 (as provided)
+  Class2 = 1 - nn_prob_predictions     # Probability of Class 2 (derived)
+)
+
+# Preview
+nn_prob_predictions_two
+
+# Example: Calculate ROC using Class1 probabilities
+roc_nn <- roc(test_data$Continent_Encoded, nn_prob_predictions_two$Class1)
+
+```
+
+```{r}
+library(caret)
+
+
+extract_metrics <- function(predictions, actual, model_name) {
+  conf_matrix <- confusionMatrix(predictions, actual)
+  
+
+  metrics <- as.data.frame(conf_matrix$byClass)  
+  metrics$Accuracy <- conf_matrix$overall["Accuracy"]  
+  metrics$Model <- model_name  
+  metrics$Class <- rownames(metrics)  
+  return(metrics)
+}
+
+
+nn_metrics <- extract_metrics(nn_predictions, test_data$Continent_Encoded, "Neural Network")
+dt_metrics <- extract_metrics(dt_predictions, test_data$Continent_Encoded, "Decision Tree")
+xgb_metrics <- extract_metrics(xgb_predictions, test_data$Continent_Encoded, "XGBoost")
+rf_metrics <- extract_metrics(rf_predictions, test_data$Continent_Encoded, "Random Forest")
+svm_metrics <- extract_metrics(svm_predictions, test_data$Continent_Encoded, "SVM")
+logistic_metrics <- extract_metrics(predictions, test_data$Continent_Encoded, "Logistic Regression")
+
+
+all_metrics <- rbind(nn_metrics, dt_metrics, xgb_metrics, rf_metrics, svm_metrics, logistic_metrics)
+
+
+head(all_metrics)
+
+
+```
+```{r}
+# Generate probabilities from the FFNN model
+nn_prob_predictions <- predict(nn_model, newdata = test_data, type = "raw")
+
+# Check the structure of predictions
+head(nn_prob_predictions)
+
+# If nn_prob_predictions has only one column, assume it's P(class 1)
+# Ensure test_data$Continent_Encoded is coded as 0 and 1 (or 1 and 2)
+roc_nn <- roc(test_data$Continent_Encoded, nn_prob_predictions)
+nn_prob_predictions
+# Add the ROC curve to the list
+roc_list[["Feed-Forward Neural Network"]] <- roc_nn
+
+# Plot to verify
+plot(roc_nn, main = "ROC Curve for Feed-Forward Neural Network")
+
+
+
+```
+
+```{r}
+colnames(all_metrics)[colnames(all_metrics) == "conf_matrix$byClass"] <- "Value"
+key_metrics <- c("F1") #
+library(tidyr)
+
+filtered_metrics <- all_metrics %>%
+  filter(Class %in% key_metrics)
+
+# 重命名列 Value 为 Sensitivity
+colnames(filtered_metrics)[colnames(filtered_metrics) == "Value"] <- "Sensitivity"
+
+
+# 转换为长格式
+metrics_long <- filtered_metrics %>%
+  pivot_longer(cols = c(Sensitivity, Accuracy), names_to = "Metric_Type", values_to = "Metric_Value")
+
+# 绘制面板图
+ggplot(metrics_long, aes(x = Model, y = Metric_Value, fill = Metric_Type)) +
+  geom_bar(stat = "identity", position = "dodge") +
+  facet_wrap(~ Metric_Type, scales = "free_y") +
+  labs(title = "Comparison of Sensitivity and Accuracy Across Models",
+       x = "Model",
+       y = "Metric Value") +
+  theme_minimal() +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1))
+
+
+
+```
+
+```{r}
+colnames(all_metrics)[colnames(all_metrics) == "conf_matrix$byClass"] <- "Value"
+key_metrics <- c("Specificity") #
+library(tidyr)
+
+filtered_metrics <- all_metrics %>%
+  filter(Class %in% key_metrics)
+
+# 重命名列 Value 为 Sensitivity
+colnames(filtered_metrics)[colnames(filtered_metrics) == "Value"] <- "Specificity"
+
+filtered_metrics
+# 转换为长格式
+metrics_long <- filtered_metrics %>%
+  pivot_longer(cols = c(Specificity, Accuracy), names_to = "Metric_Type", values_to = "Metric_Value")
+metrics_long
+# 绘制面板图
+ggplot(metrics_long, aes(x = Model, y = Metric_Value, fill = Metric_Type)) +
+  geom_bar(stat = "identity", position = "dodge") +
+  facet_wrap(~ Metric_Type, scales = "free_y") +
+  labs(title = "Comparison of Sensitivity and Accuracy Across Models",
+       x = "Model",
+       y = "Metric Value") +
+  theme_minimal() +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1))
+
+
+
+```
+

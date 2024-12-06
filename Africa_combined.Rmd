@@ -1,0 +1,481 @@
+---
+title: "combined_code"
+output: html_document
+date: "2024-12-05"
+---
+
+```{r}
+setwd('C:/Users/ddp1u24/Downloads/Final_CW')
+```
+
+
+-----------------------------------DATA CLEANING FOR AFRICA COUNTRIES-----------
+
+```{r}
+# Read the data
+angola_data <- read.csv('original data/Africa/Angola.csv', header = TRUE, stringsAsFactors = FALSE)
+burkina_faso_data <- read.csv('original data/Africa/Burkina Faso.csv', header = TRUE, stringsAsFactors = FALSE)
+egypt_data <- read.csv('original data/Africa/Egypt.csv', header = TRUE, stringsAsFactors = FALSE)
+kenya_data <- read.csv('original data/Africa/Kenya.csv', header = TRUE, stringsAsFactors = FALSE)
+madagascar_data <- read.csv('original data/Africa/Madagascar.csv', header = TRUE, stringsAsFactors = FALSE)
+malawi_data <- read.csv('original data/Africa/Malawi.csv', header = TRUE, stringsAsFactors = FALSE)
+```
+
+```{r}
+# Remove columns with too many missing values
+angola_data <- subset(angola_data, select = -c(Evacuated, Relocated, Missing,DataCards))
+burkina_faso_data <- subset(burkina_faso_data, select = -c(Evacuated, Relocated, Missing,DataCards))
+egypt_data <- subset(egypt_data, select = -c(Evacuated, Relocated, Missing,DataCards))
+kenya_data <- subset(kenya_data, select = -c(Evacuated, Relocated, Missing,DataCards))
+madagascar_data <- subset(madagascar_data, select = -c(Evacuated, Relocated, Missing,DataCards))
+malawi_data <- subset(malawi_data, select = -c(Evacuated, Relocated, Missing,DataCards))
+```
+
+```{r}
+# Handle missing data
+fill_missing_values <- function(data) {
+  for (col in colnames(data)) {
+    # Calculate the missing value percentage
+    missing_ratio <- sum(is.na(data[[col]])) / nrow(data)
+    
+    # Fill missing values only for numeric columns
+    if (is.numeric(data[[col]])) {
+      if (missing_ratio > 0.9) {
+        # If missing percentage > 90%, fill with mean
+        data[[col]][is.na(data[[col]])] <- mean(data[[col]], na.rm = TRUE)
+      } else if (missing_ratio > 0) {
+        # If missing percentage <= 90%, fill with median
+        data[[col]][is.na(data[[col]])] <- median(data[[col]], na.rm = TRUE)
+      }
+    }
+  }
+  return(data)
+}
+
+angola_data <- fill_missing_values(angola_data)
+burkina_faso_data <- fill_missing_values(burkina_faso_data)
+egypt_data<- fill_missing_values(egypt_data)
+kenya_data<- fill_missing_values(kenya_data)
+madagascar_data<- fill_missing_values(madagascar_data)
+malawi_data<- fill_missing_values(malawi_data)
+```
+
+```{r}
+#Add a country name column to each data table
+angola_data$Country <- "Angola"
+burkina_faso_data$Country <- "Burkina Faso"
+egypt_data$Country <- "Egypt"
+kenya_data$Country <- "Kenya"
+madagascar_data$Country <- "Madagascar"
+malawi_data$Country <- "Malawi"
+```
+
+```{r}
+# Remove the total row in each table
+angola_data <- head(angola_data, -1)
+burkina_faso_data <- head(burkina_faso_data, -1)
+egypt_data <- head(egypt_data, -1)
+kenya_data <- head(kenya_data, -1)
+madagascar_data <- head(madagascar_data, -1)
+malawi_data <- head(malawi_data, -1)
+```
+
+```{r}
+# Merge all data tables
+Africa_data <- rbind(angola_data, burkina_faso_data, egypt_data, kenya_data, madagascar_data, malawi_data)
+```
+
+```{r}
+# Display the event seperately
+unique(Africa_data$Event)
+```
+
+```{r}
+# Category types of disaster
+categorize_event <- function(event) {
+  if (grepl("RAIN|STORM|WIND|HAIL|LIGHTNING|CYCLONE|SNOW|THUNDERSTORM|HAILSTORM", event, ignore.case = TRUE)) {
+    return("Natural - Meteorological")
+  } else if (grepl("FLOOD|RIVER|FLASH|COASTAL|SUBSIDENCE", event, ignore.case = TRUE)) {
+    return("Natural - Hydrological")
+  } else if (grepl("EARTHQUAKE|LANDSLIDE|LIQUEFACTION|MUDSLIDE", event, ignore.case = TRUE)) {
+    return("Natural - Geological")
+  } else if (grepl("EPIDEMIC|CHOLERA|YELLOW FEVER|MENINGITIS|MEASLES|BIOLOGICAL", event, ignore.case = TRUE)) {
+    return("Biological - Epidemics")
+  } else if (grepl("LOCUST|ARMYWORM|ANIMAL|BIRD", event, ignore.case = TRUE)) {
+    return("Biological - Pests and Animals")
+  } else if (grepl("ACCIDENT|PLANE|NAVIGATION|TRAIN|ROAD", event, ignore.case = TRUE)) {
+    return("Man-made - Transportation")
+  } else if (grepl("FIRE|BUSH FIRE|EXPLOSION", event, ignore.case = TRUE)) {
+    return("Man-made - Fire and Explosions")
+  } else if (grepl("POLLUTION|HAZARDOUS|LEAK", event, ignore.case = TRUE)) {
+    return("Man-made - Pollution")
+  } else if (grepl("CONFLICT|TERROR|CIVIL STRIFE", event, ignore.case = TRUE)) {
+    return("Social - Conflict and Violence")
+  } else if (grepl("MALNUTRITION|FOOD INSECURITY", event, ignore.case = TRUE)) {
+    return("Social - Other")
+  } else if (grepl("AND|&|,", event, ignore.case = TRUE)) {
+    return("Complex")
+  } else {
+    return("Other")
+  }
+}
+
+Africa_data$Category <- sapply(Africa_data$Event, categorize_event)
+```
+
+```{r}
+# Rounded to the nearest natural number
+Africa_data$Deaths <- round(Africa_data$Deaths)
+Africa_data$Injured <- round(Africa_data$Injured)
+Africa_data$Houses.Destroyed <- round(Africa_data$Houses.Destroyed)
+Africa_data$Houses.Damaged <- round(Africa_data$Houses.Damaged)
+Africa_data$Directly.affected <- round(Africa_data$Directly.affected)
+Africa_data$Indirectly.Affected <- round(Africa_data$Indirectly.Affected)
+```
+
+```{r}
+# Replace NA in the specified column with 0
+Africa_data[is.na(Africa_data)] <- 0
+```
+
+```{r}
+# Create country name to number mappings
+Africa_data$Country_ID <- match(Africa_data$Country, unique(Africa_data$Country))
+Africa_data$Category_ID <- as.numeric(as.factor(Africa_data$Category))
+```
+
+```{r}
+# Write the cleaned data to a csv file
+write.csv(Africa_data, "cleaned data/Africa_cleaned_data.csv", row.names = FALSE)
+```
+
+------------------------------DATA VISUAlISATION FOR AFRICA COUNTRIES-----------
+
+```{r}
+# Import libraries
+library(ggplot2)
+library(dplyr)
+```
+
+```{r}
+# Read the data
+data <- read.csv("cleaned data/Africa_cleaned_data.csv")
+```
+
+```{r}
+# Summarize total deaths by event type and filter the top 20 events
+event_summary <- aggregate(Deaths ~ Event, data = data, sum, na.rm = TRUE)
+colnames(event_summary) <- c("Event", "Total_Deaths")
+event_summary <- event_summary[order(-event_summary$Total_Deaths), ]
+event_summary <- event_summary[1:20, ] 
+
+ggplot(event_summary, aes(x = reorder(Event, -Total_Deaths), y = Total_Deaths)) +
+  geom_bar(stat = "identity", fill = "skyblue") +
+  coord_flip() +
+  labs(title = "Top 20 Events by Total Deaths", x = "Event Type", y = "Total Deaths") +
+  theme_minimal()
+```
+
+```{r}
+# Summarise events by category
+category_summary <- aggregate(Event ~ Category, data = data, length)
+colnames(category_summary) <- c("Category", "Count")
+```
+
+```{r}
+# Draw a pie chart
+ggplot(category_summary, aes(x = "", y = Count, fill = Category)) +
+  geom_bar(stat = "identity", width = 1) +
+  coord_polar(theta = "y") +
+  labs(title = "Proportion of Event Categories", x = "", y = "") +
+  theme_minimal()
+```
+
+```{r}
+# Summarise total affected population by country
+data$Total_Affected <- data$Directly.affected + data$Indirectly.Affected
+country_summary <- aggregate(Total_Affected ~ Country, data = data, sum, na.rm = TRUE)
+country_summary <- country_summary[order(-country_summary$Total_Affected), ]
+country_summary <- country_summary[1:3, ]
+
+ggplot(country_summary, aes(x = reorder(Country, -Total_Affected), y = Total_Affected)) +
+  geom_bar(stat = "identity", fill = "orange") +
+  coord_flip() +
+  labs(title = "Top 3 Countries by Total Affected Population", 
+       x = "Country", y = "Total Affected Population") +
+  theme_minimal()
+
+```
+
+---------------------------------------------PCA FOR AFRICA COUNTRIES-----------
+
+```{r}
+Africa_data <- read.csv('cleaned data/Africa_cleaned_data.csv')
+```
+
+
+```{r}
+# Extract numeric data
+numeric_data <- Africa_data[sapply(Africa_data, is.numeric)]
+scaled_data <- scale(numeric_data)
+```
+
+```{r}
+pca_result <- prcomp(scaled_data, center = TRUE, scale. = TRUE)
+summary(pca_result)       
+pca_result$rotation     
+```
+
+```{r}
+library(factoextra)
+fviz_eig(pca_result, addlabels = TRUE, ylim = c(0, 100))
+```
+
+```{r}
+# Plot 
+fviz_pca_ind(pca_result,
+             geom = "point", 
+             col.ind = "cos2",  
+             gradient.cols = c("#00AFBB", "#E7B800", "#FC4E07"),
+             repel = TRUE)     
+
+```
+
+```{r}
+# Mapping variable contributions
+fviz_pca_var(pca_result,
+             col.var = "contrib", 
+             gradient.cols = c("#00AFBB", "#E7B800", "#FC4E07"),
+             repel = TRUE)       
+```
+
+```{r}
+# Extract the first four principal component scores
+pca_scores <- as.data.frame(pca_result$x[, 1:7])
+
+# Merge the first four principal component scores into the raw data
+Africa_data_pca <- cbind(Africa_data, pca_scores)
+```
+
+```{r}
+# Write the PCA results using cleaned data to a csv file
+write.csv(Africa_data_pca, "pca data/Africa_data_pca.csv", row.names = FALSE)
+```
+
+```{r}
+library(ggcorrplot)
+selected_columns <- c("Deaths", "Injured", "Houses.Destroyed", 
+                      "Houses.Damaged", "Directly.affected", "Indirectly.Affected","Category_ID", "Country_ID")
+filtered_data <- Africa_data_pca[, selected_columns]
+
+# Calculate the correlation matrix
+cor_matrix <- cor(filtered_data, use = "complete.obs")
+
+# Heat mapping of correlations
+ggcorrplot(cor_matrix, 
+           method = "circle", 
+           lab = TRUE, 
+           lab_size = 3, 
+           title = "Correlation Matrix ",
+           colors = c("red", "white", "blue"))
+
+```
+
+
+-----------------------REGRESSION WITH AFRICA ORIGINALLY CLEANED DATA-----------
+
+
+```{r}
+library(tidyverse)
+library(caret)
+library(ggplot2)
+```
+
+```{r}
+# Read the data
+original_cleaned_data <- read.csv('cleaned data/Africa_cleaned_data.csv')
+```
+
+```{r}
+# Split the dataset into train set and test set
+train_indices <- original_cleaned_data$Deaths
+train_indices <- createDataPartition(1:length(original_cleaned_data$Deaths), 
+                                        p = 0.8, list = FALSE, group = 1)
+
+train_data <- original_cleaned_data[train_indices, ]
+test_data <- original_cleaned_data[-train_indices, ]
+
+```
+
+```{r}
+# Apply to a regression model
+regression_model <- lm(Deaths ~ Injured + Houses.Destroyed + Houses.Damaged + 
+                         Directly.affected + Indirectly.Affected + Country_ID + Category_ID, 
+                       data = train_data)
+```
+
+```{r}
+# First look at the model
+summary(regression_model)
+```
+
+```{r}
+# Evaluate the model
+train_predictions <- predict(regression_model, newdata = train_data)
+test_predictions <- predict(regression_model, newdata = test_data)
+
+train_actual <- train_data$Deaths
+test_actual <- test_data$Deaths
+
+mae <- function(actual, predicted) { mean(abs(actual - predicted)) }
+mse <- function(actual, predicted) { mean((actual - predicted)^2) }
+rmse <- function(actual, predicted) { sqrt(mse(actual, predicted)) }
+mape <- function(actual, predicted) { mean(abs((actual - predicted) / actual)) * 100 }
+```
+
+```{r}
+train_r2 <- summary(regression_model)$r.squared
+train_mae <- mae(train_actual, train_predictions)
+train_mse <- mse(train_actual, train_predictions)
+train_rmse <- rmse(train_actual, train_predictions)
+train_mape <- mape(train_actual, train_predictions)
+
+test_r2 <- cor(test_actual, test_predictions)^2 
+test_mae <- mae(test_actual, test_predictions)
+test_mse <- mse(test_actual, test_predictions)
+test_rmse <- rmse(test_actual, test_predictions)
+test_mape <- mape(test_actual, test_predictions)
+
+evaluation_metrics <- data.frame(
+  Metric = c("R-squared", "MAE", "MSE", "RMSE", "MAPE"),
+  Train = c(train_r2, train_mae, train_mse, train_rmse, train_mape),
+  Test = c(test_r2, test_mae, test_mse, test_rmse, test_mape)
+)
+
+print(evaluation_metrics)
+```
+
+```{r}
+# Plot the regression result for train set
+plot(train_data$Deaths, predict(regression_model, newdata = train_data),
+     main = "Actual vs Predicted Deaths (Training Set)",
+     xlab = "Actual Deaths", ylab = "Predicted Deaths",
+     col = "skyblue", pch = 16, cex = 0.8)
+
+abline(0, 1, col = "red", lwd = 2, lty = 2)
+grid(nx = NULL, ny = NULL, lty = 2, col = "gray", lwd = 2)
+legend("topright", legend = c("Data Points", "Regression Line"),
+       col = c("skyblue", "red"), pch = c(16, NA), lty = c(NA, 2), lwd = c(NA, 2))
+
+```
+
+```{r}
+# Plot the regression result for test set
+plot(test_data$Deaths, predict(regression_model, newdata = test_data),
+     main = "Actual vs Predicted Deaths (Testing Set)",
+     xlab = "Actual Deaths", ylab = "Predicted Deaths",
+     col = "green", pch = 16, cex = 0.8)
+
+abline(0, 1, col = "red", lwd = 2, lty = 2)
+grid(nx = NULL, ny = NULL, lty = 2, col = "gray", lwd = 2)
+legend("topright", legend = c("Data Points", "Regression Line"),
+       col = c("green", "red"), pch = c(16, NA), lty = c(NA, 2), lwd = c(NA, 2))
+
+```
+
+
+--------------------------------------REGRESSION WITH AFRICA PCA DATA-----------
+
+```{r}
+# Read the data
+pca_data <- read.csv('pca data/Africa_data_pca.csv')
+```
+
+```{r}
+# Split the dataset into train set and test set
+train_indices <- pca_data$Deaths
+train_indices <- createDataPartition(1:length(pca_data$Deaths), 
+                                        p = 0.8, list = FALSE, group = 1)
+
+train_data <- pca_data[train_indices, ]
+test_data <- pca_data[-train_indices, ]
+
+```
+
+```{r}
+# Apply to a regression model
+regression_model_pca <- lm(Deaths ~ PC1 + PC2 + PC3 + PC4 + PC5 + PC6 + PC7, 
+                       data = train_data)
+```
+
+```{r}
+# First look at the model
+summary(regression_model_pca)
+```
+
+```{r}
+# Evaluate the model
+train_predictions <- predict(regression_model_pca, newdata = train_data)
+test_predictions <- predict(regression_model_pca, newdata = test_data)
+
+train_actual <- train_data$Deaths
+test_actual <- test_data$Deaths
+
+mae <- function(actual, predicted) { mean(abs(actual - predicted)) }
+mse <- function(actual, predicted) { mean((actual - predicted)^2) }
+rmse <- function(actual, predicted) { sqrt(mse(actual, predicted)) }
+mape <- function(actual, predicted) { mean(abs((actual - predicted) / actual)) * 100 }
+```
+
+```{r}
+train_r2 <- summary(regression_model_pca)$r.squared
+train_mae <- mae(train_actual, train_predictions)
+train_mse <- mse(train_actual, train_predictions)
+train_rmse <- rmse(train_actual, train_predictions)
+train_mape <- mape(train_actual, train_predictions)
+
+test_r2 <- cor(test_actual, test_predictions)^2
+test_mae <- mae(test_actual, test_predictions)
+test_mse <- mse(test_actual, test_predictions)
+test_rmse <- rmse(test_actual, test_predictions)
+test_mape <- mape(test_actual, test_predictions)
+
+evaluation_metrics <- data.frame(
+  Metric = c("R-squared", "MAE", "MSE", "RMSE", "MAPE"),
+  Train = c(train_r2, train_mae, train_mse, train_rmse, train_mape),
+  Test = c(test_r2, test_mae, test_mse, test_rmse, test_mape)
+)
+
+print(evaluation_metrics)
+```
+
+```{r}
+# Plot the regression result for train set
+plot(train_data$Deaths, predict(regression_model_pca, newdata = train_data),
+     main = "Actual vs Predicted Deaths (Training Set)",
+     xlab = "Actual Deaths", ylab = "Predicted Deaths",
+     col = "skyblue", pch = 16, cex = 0.8)
+
+abline(0, 1, col = "red", lwd = 2, lty = 2)
+grid(nx = NULL, ny = NULL, lty = 2, col = "gray", lwd = 2)
+legend("topright", legend = c("Data Points", "Regression Line"),
+       col = c("skyblue", "red"), pch = c(16, NA), lty = c(NA, 2), lwd = c(NA, 2))
+
+```
+
+```{r}
+# Plot the regression result for test set
+plot(test_data$Deaths, predict(regression_model_pca, newdata = test_data),
+     main = "Actual vs Predicted Deaths (Testing Set)",
+     xlab = "Actual Deaths", ylab = "Predicted Deaths",
+     col = "green", pch = 16, cex = 0.8)
+
+abline(0, 1, col = "red", lwd = 2, lty = 2)
+grid(nx = NULL, ny = NULL, lty = 2, col = "gray", lwd = 2)
+legend("topright", legend = c("Data Points", "Regression Line"),
+       col = c("green", "red"), pch = c(16, NA), lty = c(NA, 2), lwd = c(NA, 2))
+
+```
+
+
+

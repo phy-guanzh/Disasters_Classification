@@ -1,0 +1,483 @@
+---
+title: "combined_code"
+output: html_document
+date: "2024-12-05"
+---
+
+```{r}
+setwd('C:/Users/ddp1u24/Downloads/Final_CW')
+```
+
+-----------------------------------DATA CLEANING FOR South America COUNTRIES-----------
+
+```{r}
+# Read the data
+argentina_data <- read.csv('original data/South America/Argentina.csv', header = TRUE, stringsAsFactors = FALSE)
+bolivia_data <- read.csv('original data/South America/Bolivia.csv', header = TRUE, stringsAsFactors = FALSE)
+chile_data <- read.csv('original data/South America/Chile.csv', header = TRUE, stringsAsFactors = FALSE)
+colombia_data <- read.csv('original data/South America/Colombia.csv', header = TRUE, stringsAsFactors = FALSE)
+ecuador_data <- read.csv('original data/South America/Ecuador.csv', header = TRUE, stringsAsFactors = FALSE)
+peru_data <- read.csv('original data/South America/Peru.csv', header = TRUE, stringsAsFactors = FALSE)
+venezuela_data <- read.csv('original data/South America/Venezuela.csv', header = TRUE, stringsAsFactors = FALSE)
+```
+
+```{r}
+# Remove columns with too many missing values
+argentina_data <- subset(argentina_data, select = -c(Evacuated, Relocated, Missing,DataCards))
+bolivia_data <- subset(bolivia_data, select = -c(Evacuated, Relocated, Missing,DataCards))
+chile_data <- subset(chile_data, select = -c(Evacuated, Relocated, Missing,DataCards))
+colombia_data <- subset(colombia_data, select = -c(Evacuated, Relocated, Missing,DataCards))
+ecuador_data <- subset(ecuador_data, select = -c(Evacuated, Relocated, Missing,DataCards))
+peru_data <- subset(peru_data, select = -c(Evacuated, Relocated, Missing,DataCards))
+venezuela_data <- subset(venezuela_data, select = -c(Evacuated, Relocated, Missing,DataCards))
+```
+
+```{r}
+# Handle missing data
+fill_missing_values <- function(data) {
+  for (col in colnames(data)) {
+    # Calculate the missing value percentage
+    missing_ratio <- sum(is.na(data[[col]])) / nrow(data)
+    
+    # Fill missing values only for numeric columns
+    if (is.numeric(data[[col]])) {
+      if (missing_ratio > 0.9) {
+        # If missing percentage > 90%, fill with mean
+        data[[col]][is.na(data[[col]])] <- mean(data[[col]], na.rm = TRUE)
+      } else if (missing_ratio > 0) {
+        # If missing percentage <= 90%, fill with median
+        data[[col]][is.na(data[[col]])] <- median(data[[col]], na.rm = TRUE)
+      }
+    }
+  }
+  return(data)
+}
+
+argentina_data <- fill_missing_values(argentina_data)
+bolivia_data <- fill_missing_values(bolivia_data)
+chile_data<- fill_missing_values(chile_data)
+colombia_data<- fill_missing_values(colombia_data)
+ecuador_data<- fill_missing_values(ecuador_data)
+peru_data<- fill_missing_values(peru_data)
+venezuela_data<- fill_missing_values(venezuela_data)
+```
+
+```{r}
+#Add a country name column to each data table
+argentina_data$Country <- "Argentina"
+bolivia_data$Country <- "Bolivia"
+chile_data$Country <- "Chile"
+colombia_data$Country <- "Colombia"
+ecuador_data$Country <- "Ecuador"
+peru_data$Country <- "Peru"
+venezuela_data$Country <- "Venezuela"
+```
+
+```{r}
+# Remove the total row in each table
+argentina_data <- head(argentina_data, -1)
+bolivia_data <- head(bolivia_data, -1)
+chile_data <- head(chile_data, -1)
+colombia_data <- head(colombia_data, -1)
+ecuador_data <- head(ecuador_data, -1)
+peru_data <- head(peru_data, -1)
+venezuela_data <- head(venezuela_data, -1)
+```
+
+```{r}
+# Merge all data tables
+South_America_data <- rbind(argentina_data, bolivia_data, chile_data, colombia_data, ecuador_data, peru_data, venezuela_data)
+```
+
+```{r}
+# Display the event seperately
+unique(South_America_data$Event)
+```
+
+```{r}
+# Category types of disaster
+categorize_event <- function(event) {
+  if (grepl("RAIN|STORM|WIND|HAIL|LIGHTNING|CYCLONE|SNOW|FOG|FROST|HEATWAVE|HURRICANE|ELECTRICSTORM|OLA DE FRIO", event, ignore.case = TRUE)) {
+    return("Natural - Meteorological")
+  } else if (grepl("FLOOD|RIVER|TSUNAMI|SURGE|COASTLINE|OLEAJE|AGUAJE|SEDIMENTATION", event, ignore.case = TRUE)) {
+    return("Natural - Hydrological")
+  } else if (grepl("EARTHQUAKE|LANDSLIDE|AVALANCHE|MUDSLIDE|LIQUEFACTION|EROSION|FLUJOLODO|LITORAL", event, ignore.case = TRUE)) {
+    return("Natural - Geological")
+  } else if (grepl("EPIDEMIC|BIOLOGICAL|PLAGUE|EPIZOOTIA", event, ignore.case = TRUE)) {
+    return("Biological - Epidemics")
+  } else if (grepl("LOCUST|ARMYWORM|ANIMAL|BIRD|ARBOL CAIDO", event, ignore.case = TRUE)) {
+    return("Biological - Pests and Animals")
+  } else if (grepl("ACCIDENT|PLANE|TRAIN|ROAD|NÁUTICO|FLUVIAL", event, ignore.case = TRUE)) {
+    return("Man-made - Transportation")
+  } else if (grepl("FIRE|EXPLOSION|FORESTFIRE", event, ignore.case = TRUE)) {
+    return("Man-made - Fire and Explosions")
+  } else if (grepl("POLLUTION|HAZARDOUS|LEAK|INTOXICACION|MATERIALES PELIGROSOS", event, ignore.case = TRUE)) {
+    return("Man-made - Pollution")
+  } else if (grepl("CONFLICT|TERROR|SOCIAL|PANIC|AMENAZA", event, ignore.case = TRUE)) {
+    return("Social - Conflict and Violence")
+  } else if (grepl("MALNUTRITION|FOOD INSECURITY|DESEAPARECIDO|DÉFICIT HÍDRICO", event, ignore.case = TRUE)) {
+    return("Social - Other")
+  } else if (grepl("AND|&|,", event, ignore.case = TRUE)) {
+    return("Complex")
+  } else {
+    return("Other")
+  }
+}
+
+South_America_data$Category <- sapply(South_America_data$Event, categorize_event)
+```
+
+```{r}
+# Rounded to the nearest natural number
+South_America_data$Deaths <- round(South_America_data$Deaths)
+South_America_data$Injured <- round(South_America_data$Injured)
+South_America_data$Houses.Destroyed <- round(South_America_data$Houses.Destroyed)
+South_America_data$Houses.Damaged <- round(South_America_data$Houses.Damaged)
+South_America_data$Directly.affected <- round(South_America_data$Directly.affected)
+South_America_data$Indirectly.Affected <- round(South_America_data$Indirectly.Affected)
+```
+
+```{r}
+# Replace NA in the specified column with 0
+South_America_data[is.na(South_America_data)] <- 0
+```
+
+```{r}
+# Create country name to number mappings
+South_America_data$Country_ID <- match(South_America_data$Country, unique(South_America_data$Country))
+South_America_data$Category_ID <- as.numeric(as.factor(South_America_data$Category))
+```
+
+```{r}
+# Write the cleaned data to a csv file
+write.csv(South_America_data, "cleaned data/South_America_cleaned_data.csv", row.names = FALSE)
+```
+
+------------------------------DATA VISUAlISATION FOR South America COUNTRIES-----------
+
+```{r}
+# Import libraries
+library(ggplot2)
+library(dplyr)
+```
+
+```{r}
+# Read the data
+data <- read.csv("cleaned data/South_America_cleaned_data.csv")
+```
+
+```{r}
+# Summarize total deaths by event type and filter the top 20 events
+event_summary <- aggregate(Deaths ~ Event, data = data, sum, na.rm = TRUE)
+colnames(event_summary) <- c("Event", "Total_Deaths")
+event_summary <- event_summary[order(-event_summary$Total_Deaths), ]
+event_summary <- event_summary[1:20, ]
+
+ggplot(event_summary, aes(x = reorder(Event, -Total_Deaths), y = Total_Deaths)) +
+  geom_bar(stat = "identity", fill = "skyblue") +
+  coord_flip() +
+  labs(title = "Top 20 Events by Total Deaths", x = "Event Type", y = "Total Deaths") +
+  theme_minimal()
+```
+
+```{r}
+# Summarize events by category
+category_summary <- aggregate(Event ~ Category, data = data, length)
+colnames(category_summary) <- c("Category", "Count")
+```
+
+```{r}
+# Pie chart
+ggplot(category_summary, aes(x = "", y = Count, fill = Category)) +
+  geom_bar(stat = "identity", width = 1) +
+  coord_polar(theta = "y") +
+  labs(title = "Proportion of Event Categories", x = "", y = "") +
+  theme_minimal()
+```
+
+```{r}
+# Summarize total affected population by country
+data$Total_Affected <- data$Directly.affected + data$Indirectly.Affected
+country_summary <- aggregate(Total_Affected ~ Country, data = data, sum, na.rm = TRUE)
+country_summary <- country_summary[order(-country_summary$Total_Affected), ]
+country_summary <- country_summary[1:5, ]
+
+ggplot(country_summary, aes(x = reorder(Country, -Total_Affected), y = Total_Affected)) +
+  geom_bar(stat = "identity", fill = "orange") +
+  coord_flip() +
+  labs(title = "Top 5 Countries by Total Affected Population", 
+       x = "Country", y = "Total Affected Population") +
+  theme_minimal()
+```
+
+---------------------------------------------PCA FOR South America COUNTRIES-----------
+
+```{r}
+South_America_data <- read.csv('cleaned data/South_America_cleaned_data.csv')
+```
+
+```{r}
+# Extract numeric data
+numeric_data <- South_America_data[sapply(South_America_data, is.numeric)]
+scaled_data <- scale(numeric_data)
+```
+
+```{r}
+pca_result <- prcomp(scaled_data, center = TRUE, scale. = TRUE)
+summary(pca_result)       
+pca_result$rotation      
+```
+
+```{r}
+library(factoextra)
+fviz_eig(pca_result, addlabels = TRUE, ylim = c(0, 100))
+```
+
+```{r}
+# Plot 
+fviz_pca_ind(pca_result,
+             geom = "point", 
+             col.ind = "cos2",  
+             gradient.cols = c("#00AFBB", "#E7B800", "#FC4E07"),
+             repel = TRUE)     
+```
+
+```{r}
+# Mapping variable contributions
+fviz_pca_var(pca_result,
+             col.var = "contrib", 
+             gradient.cols = c("#00AFBB", "#E7B800", "#FC4E07"),
+             repel = TRUE)      
+```
+
+```{r}
+# Extract the first four principal component scores
+pca_scores <- as.data.frame(pca_result$x[, 1:6])
+
+# Merge the first four principal component scores into the raw data
+South_America_data_pca <- cbind(South_America_data, pca_scores)
+```
+
+```{r}
+# Write the PCA results using cleaned data to a csv file
+write.csv(South_America_data_pca, "pca data/South_America_data_pca.csv", row.names = FALSE)
+```
+
+```{r}
+library(ggcorrplot)
+selected_columns <- c("Deaths", "Injured", "Houses.Destroyed", 
+                      "Houses.Damaged", "Directly.affected", "Indirectly.Affected","Category_ID", "Country_ID")
+filtered_data <- South_America_data_pca[, selected_columns]
+
+# Calculate the correlation matrix
+cor_matrix <- cor(filtered_data, use = "complete.obs")
+
+# Heat mapping of correlations
+ggcorrplot(cor_matrix, 
+           method = "circle", 
+           lab = TRUE, 
+           lab_size = 3, 
+           title = "Correlation Matrix ",
+           colors = c("red", "white", "blue"))
+
+```
+
+-----------------------REGRESSION WITH South America ORIGINALLY CLEANED DATA-----------
+
+```{r}
+library(tidyverse)
+library(caret)
+library(ggplot2)
+```
+
+```{r}
+# Read the data
+original_cleaned_data <- read.csv('cleaned data/South_America_cleaned_data.csv')
+```
+
+```{r}
+# Split the dataset into train set and test set
+train_indices <- original_cleaned_data$Deaths
+train_indices <- createDataPartition(1:length(original_cleaned_data$Deaths), 
+                                        p = 0.8, list = FALSE, group = 1)
+
+train_data <- original_cleaned_data[train_indices, ]
+test_data <- original_cleaned_data[-train_indices, ]
+
+```
+
+```{r}
+# Apply to a regression model
+regression_model <- lm(Deaths ~ Injured + Houses.Destroyed + Houses.Damaged + 
+                         Directly.affected + Indirectly.Affected + Country_ID + Category_ID, 
+                       data = train_data)
+```
+
+```{r}
+# First look at the model
+summary(regression_model)
+```
+
+```{r}
+# Evaluate the model
+train_predictions <- predict(regression_model, newdata = train_data)
+test_predictions <- predict(regression_model, newdata = test_data)
+
+train_actual <- train_data$Deaths
+test_actual <- test_data$Deaths
+
+mae <- function(actual, predicted) { mean(abs(actual - predicted)) }
+mse <- function(actual, predicted) { mean((actual - predicted)^2) }
+rmse <- function(actual, predicted) { sqrt(mse(actual, predicted)) }
+mape <- function(actual, predicted) { mean(abs((actual - predicted) / actual)) * 100 }
+```
+
+```{r}
+train_actual <- train_data$Deaths
+test_actual <- test_data$Deaths
+
+train_r2 <- summary(regression_model)$r.squared
+train_mae <- mae(train_actual, train_predictions)
+train_mse <- mse(train_actual, train_predictions)
+train_rmse <- rmse(train_actual, train_predictions)
+train_mape <- mape(train_actual, train_predictions)
+
+test_r2 <- cor(test_actual, test_predictions)^2 
+test_mae <- mae(test_actual, test_predictions)
+test_mse <- mse(test_actual, test_predictions)
+test_rmse <- rmse(test_actual, test_predictions)
+test_mape <- mape(test_actual, test_predictions)
+
+evaluation_metrics <- data.frame(
+  Metric = c("R-squared", "MAE", "MSE", "RMSE", "MAPE"),
+  Train = c(train_r2, train_mae, train_mse, train_rmse, train_mape),
+  Test = c(test_r2, test_mae, test_mse, test_rmse, test_mape)
+)
+
+print(evaluation_metrics)
+```
+
+```{r}
+# Plot the regression result for train set
+plot(train_data$Deaths, predict(regression_model, newdata = train_data),
+     main = "Actual vs Predicted Deaths (Training Set)",
+     xlab = "Actual Deaths", ylab = "Predicted Deaths",
+     col = "skyblue", pch = 16, cex = 0.8)
+
+abline(0, 1, col = "red", lwd = 2, lty = 2)
+grid(nx = NULL, ny = NULL, lty = 2, col = "gray", lwd = 2)
+legend("topright", legend = c("Data Points", "Regression Line"),
+       col = c("skyblue", "red"), pch = c(16, NA), lty = c(NA, 2), lwd = c(NA, 2))
+```
+
+```{r}
+# Plot the regression result for test set
+plot(test_data$Deaths, predict(regression_model, newdata = test_data),
+     main = "Actual vs Predicted Deaths (Testing Set)",
+     xlab = "Actual Deaths", ylab = "Predicted Deaths",
+     col = "green", pch = 16, cex = 0.8)
+
+abline(0, 1, col = "red", lwd = 2, lty = 2)
+grid(nx = NULL, ny = NULL, lty = 2, col = "gray", lwd = 2)
+legend("topright", legend = c("Data Points", "Regression Line"),
+       col = c("green", "red"), pch = c(16, NA), lty = c(NA, 2), lwd = c(NA, 2))
+```
+
+
+
+
+--------------------------------------REGRESSION WITH South America PCA DATA-----------
+
+```{r}
+# Read the data
+pca_data <- read.csv('pca data/South_America_data_pca.csv')
+```
+
+```{r}
+# Split the dataset into train set and test set
+train_indices <- pca_data$Deaths
+train_indices <- createDataPartition(1:length(pca_data$Deaths), 
+                                        p = 0.8, list = FALSE, group = 1)
+
+train_data <- pca_data[train_indices, ]
+test_data <- pca_data[-train_indices, ]
+
+```
+
+```{r}
+# Apply to a regression model
+regression_model_pca <- lm(Deaths ~ PC1 + PC2 + PC3 + PC4 + PC5 + PC6, 
+                       data = train_data)
+```
+
+```{r}
+# First look at the model
+summary(regression_model_pca)
+```
+
+```{r}
+# Evaluate the model
+train_predictions <- predict(regression_model_pca, newdata = train_data)
+test_predictions <- predict(regression_model_pca, newdata = test_data)
+
+train_actual <- train_data$Deaths
+test_actual <- test_data$Deaths
+
+mae <- function(actual, predicted) { mean(abs(actual - predicted)) }
+mse <- function(actual, predicted) { mean((actual - predicted)^2) }
+rmse <- function(actual, predicted) { sqrt(mse(actual, predicted)) }
+mape <- function(actual, predicted) { mean(abs((actual - predicted) / actual)) * 100 }
+```
+
+```{r}
+train_r2 <- summary(regression_model_pca)$r.squared
+train_mae <- mae(train_actual, train_predictions)
+train_mse <- mse(train_actual, train_predictions)
+train_rmse <- rmse(train_actual, train_predictions)
+train_mape <- mape(train_actual, train_predictions)
+
+test_r2 <- cor(test_actual, test_predictions)^2
+test_mae <- mae(test_actual, test_predictions)
+test_mse <- mse(test_actual, test_predictions)
+test_rmse <- rmse(test_actual, test_predictions)
+test_mape <- mape(test_actual, test_predictions)
+
+evaluation_metrics <- data.frame(
+  Metric = c("R-squared", "MAE", "MSE", "RMSE", "MAPE"),
+  Train = c(train_r2, train_mae, train_mse, train_rmse, train_mape),
+  Test = c(test_r2, test_mae, test_mse, test_rmse, test_mape)
+)
+
+print(evaluation_metrics)
+```
+
+```{r}
+# Plot the regression result for train set
+plot(train_data$Deaths, predict(regression_model_pca, newdata = train_data),
+     main = "Actual vs Predicted Deaths (Training Set)",
+     xlab = "Actual Deaths", ylab = "Predicted Deaths",
+     col = "skyblue", pch = 16, cex = 0.8)
+
+abline(0, 1, col = "red", lwd = 2, lty = 2)
+grid(nx = NULL, ny = NULL, lty = 2, col = "gray", lwd = 2)
+legend("topright", legend = c("Data Points", "Regression Line"),
+       col = c("skyblue", "red"), pch = c(16, NA), lty = c(NA, 2), lwd = c(NA, 2))
+
+```
+
+```{r}
+# Plot the regression result for test set
+plot(test_data$Deaths, predict(regression_model_pca, newdata = test_data),
+     main = "Actual vs Predicted Deaths (Testing Set)",
+     xlab = "Actual Deaths", ylab = "Predicted Deaths",
+     col = "green", pch = 16, cex = 0.8)
+
+abline(0, 1, col = "red", lwd = 2, lty = 2)
+grid(nx = NULL, ny = NULL, lty = 2, col = "gray", lwd = 2)
+legend("topright", legend = c("Data Points", "Regression Line"),
+       col = c("green", "red"), pch = c(16, NA), lty = c(NA, 2), lwd = c(NA, 2))
+
+```
+
+
+
